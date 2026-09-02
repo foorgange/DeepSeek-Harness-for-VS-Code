@@ -60,8 +60,15 @@ export async function ensureRollbackPluginInstalled(bundledDir: string): Promise
     const installedVersion = existsSync(join(targetDir, VERSION_FILE))
       ? readFileSync(join(targetDir, VERSION_FILE), "utf8").trim()
       : "";
-    if (bundledVersion && installedVersion === bundledVersion) {
-      return { installed: true, changed: false };
+    const filesUpToDate = Boolean(bundledVersion && installedVersion === bundledVersion);
+    if (filesUpToDate) {
+      // 文件已就位:跳过复制,但仍要幂等对齐 file: 依赖 —— 扩展自升级后 bundledDir 会指向
+      // 新版本目录,而 package.json 里的 file: 路径是首次安装时写死的旧目录(升级后已被删除),
+      // 若不迁移,profile 里任何 pnpm / `dsh plugin` 操作都会报 ERR_PNPM_LINKED_PKG_DIR_NOT_FOUND。
+      return {
+        installed: true,
+        changed: syncManifestDependency(profileDir, bundledDir),
+      };
     }
 
     // 1) 复制插件包(先清旧目录,避免残留旧文件)
@@ -94,25 +101,38 @@ export async function ensureRollbackPluginInstalled(bundledDir: string): Promise
       }
     }
 
-    // 3) profile package.json 依赖(file: 指向扩展内置资源,日后 pnpm install 可规范化)
-    const manifestFile = join(profileDir, "package.json");
-    if (existsSync(manifestFile)) {
-      try {
-        const manifest = readJson(manifestFile) as { dependencies?: Record<string, string> };
-        if (!manifest.dependencies?.[PLUGIN_NAME]) {
-          manifest.dependencies = {
-            ...(manifest.dependencies ?? {}),
-            [PLUGIN_NAME]: `file:${bundledDir.replace(/\\/g, "/")}`,
-          };
-          writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
-        }
-      } catch {
-        // profile package.json 损坏时跳过依赖写入,不影响核心安装
-      }
-    }
+    // 3) profile package.json 依赖(file: 指向扩展内置资源,日后 pnpm install 可规范化)。
+    //    与文件复制解耦:即使文件已是最新,只要依赖 key 存在但指向过期路径(扩展升级前
+    //    写入的旧版本目录),也要迁移到当前 bundledDir。
+    syncManifestDependency(profileDir, bundledDir);
+    // 走到这里说明插件文件本次被重新复制(changed=true);依赖迁移作为副作用已同步执行
     return { installed: true, changed: true };
   } catch (error) {
     console.error("[dsh] rollback plugin install failed:", error);
     return { installed: false, changed: false, reason: String(error) };
+  }
+}
+
+/** 幂等对齐 profile package.json 的 file: 依赖:缺失则新增,指向过期路径则迁移到当前 bundledDir。返回是否发生写入。 */
+function syncManifestDependency(profileDir: string, bundledDir: string): boolean {
+  const manifestFile = join(profileDir, "package.json");
+  if (!existsSync(manifestFile)) return false;
+  try {
+    const manifest = readJson(manifestFile) as { dependencies?: Record<string, string> };
+    const existing = manifest.dependencies?.[PLUGIN_NAME];
+    // 只处理本扩展自己写入的 file: 依赖:缺失则补上,路径过期(指向已删除的旧版本扩展目录)则迁移。
+    // 用户手动 pin 成 registry/git 版本等非 file: spec 时保持尊重,不覆盖。
+    if (existing !== undefined && !existing.startsWith("file:")) return false;
+    const dependency = `file:${bundledDir.replace(/\\/g, "/")}`;
+    if (existing === dependency) return false;
+    manifest.dependencies = {
+      ...(manifest.dependencies ?? {}),
+      [PLUGIN_NAME]: dependency,
+    };
+    writeFileSync(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
+    return true;
+  } catch {
+    // profile package.json 损坏时跳过依赖写入,不影响核心安装
+    return false;
   }
 }
