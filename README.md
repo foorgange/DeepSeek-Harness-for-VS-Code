@@ -24,6 +24,16 @@
 >
 > This is a personal fork of [NEXTINDIE/DeepSeek-Harness-for-VS-Code](https://github.com/NEXTINDIE/DeepSeek-Harness-for-VS-Code), deeply customized beyond the original (PRs #3~#6 were contributed back upstream).
 
+### 贡献者 / Contributors
+
+<a href="https://github.com/foorgange/DeepSeek-Harness-for-VS-Code/graphs/contributors">
+  <img src=".github/assets/contributors.svg" alt="Contributors" />
+</a>
+
+> 由于本仓库是 fork 仓库,GitHub 对 fork 网络的贡献者统计存在已知问题,首页侧边栏的"贡献者"栏会异常显示为空(实际上所有贡献者的提交均已正常记录,提交历史中的头像与署名均正确)。因此这里通过本地图片展示实际贡献者。
+>
+> Since this repository is a fork, GitHub has a known issue where the sidebar "Contributors" section of forked repositories renders as empty — even though every contribution is recorded correctly, with proper avatars and attributions in the commit history. The image above lists the actual contributors.
+
 ---
 
 # English Documentation

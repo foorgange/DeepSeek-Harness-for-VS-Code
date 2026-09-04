@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="368" height="68" viewBox="0 0 368 68" role="img" aria-label="Contributors">
+  <style>
+    .card { fill: #0d1117; stroke: #d0d7de; stroke-opacity: 0.35; rx: 6; }
+    .login { font: 600 11px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #24292f; }
+    .count { font: 400 10px -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; fill: #57606a; }
+    @media (prefers-color-scheme: dark) {
+      .card { fill: #161b22; stroke: #30363d; }
+      .login { fill: #e6edf3; }
+      .count { fill: #7d8590; }
+    }
+  </style>
+
+  <a href="https://github.com/foorgange" target="_blank" rel="noopener">
+    <g transform="translate(2, 2)">
+      <rect class="card" width="84" height="64" rx="6"/>
+      <clipPath id="c1"><circle cx="42" cy="24" r="20"/></clipPath>
+      <image x="22" y="4" width="40" height="40" clip-path="url(#c1)" xlink:href="https://avatars.githubusercontent.com/u/175308210?v=4&amp;s=80"/>
+      <text class="login" x="42" y="50" text-anchor="middle">foorgange</text>
+      <text class="count" x="42" y="59" text-anchor="middle">74 commits</text>
+    </g>
+  </a>
+
+  <a href="https://github.com/Zi-Yi-Ming" target="_blank" rel="noopener">
+    <g transform="translate(90, 2)">
+      <rect class="card" width="84" height="64" rx="6"/>
+      <clipPath id="c2"><circle cx="42" cy="24" r="20"/></clipPath>
+      <image x="22" y="4" width="40" height="40" clip-path="url(#c2)" xlink:href="https://avatars.githubusercontent.com/u/189140091?v=4&amp;s=80"/>
+      <text class="login" x="42" y="50" text-anchor="middle">Zi-Yi-Ming</text>
+      <text class="count" x="42" y="59" text-anchor="middle">2 commits</text>
+    </g>
+  </a>
+
+  <a href="https://github.com/NEXTINDIE" target="_blank" rel="noopener">
+    <g transform="translate(178, 2)">
+      <rect class="card" width="84" height="64" rx="6"/>
+      <clipPath id="c3"><circle cx="42" cy="24" r="20"/></clipPath>
+      <image x="22" y="4" width="40" height="40" clip-path="url(#c3)" xlink:href="https://avatars.githubusercontent.com/u/15722627?v=4&amp;s=80"/>
+      <text class="login" x="42" y="50" text-anchor="middle">NEXTINDIE</text>
+      <text class="count" x="42" y="59" text-anchor="middle">2 commits</text>
+    </g>
+  </a>
+
+  <a href="https://github.com/foorgange/DeepSeek-Harness-for-VS-Code/graphs/contributors" target="_blank" rel="noopener">
+    <g transform="translate(266, 2)">
+      <rect class="card" width="100" height="64" rx="6" fill="none"/>
+      <text class="count" x="50" y="30" text-anchor="middle">view all</text>
+      <text class="count" x="50" y="42" text-anchor="middle">contributors</text>
+    </g>
+  </a>
+</svg>
