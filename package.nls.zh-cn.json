@@ -17,6 +17,7 @@
   "cmd.showInfo.title": "DSH: 显示诊断信息",
   "cmd.showOutput.title": "DSH: 打开扩展日志",
   "cmd.repairViews.title": "DSH: 修复聊天视图(重置视图位置)",
+  "chatParticipant.dsh.description": "Use DeepSeek Harness via @dsh",
   "container.title": "DeepSeek Harness",
   "view.chat.name": "聊天",
   "config.title": "DeepSeek Harness",
