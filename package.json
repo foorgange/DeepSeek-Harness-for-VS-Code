@@ -2,7 +2,7 @@
   "name": "dsh-vscode-pro",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.12.3",
+  "version": "0.12.4",
   "publisher": "foorgange",
   "icon": "media/icon.png",
   "license": "MIT",
