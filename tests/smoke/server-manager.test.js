@@ -73,8 +73,11 @@ const server = http.createServer((req, res) => {
 server.listen(port, "127.0.0.1", () => {
   process.send && process.send("ready");
 });
-// 保持存活
+// 保持存活;设置了 DSH_FAKE_EXIT_MS 时到点自行崩溃(模拟异常退出,不调用 stop)
 setInterval(() => {}, 1000);
+if (process.env.DSH_FAKE_EXIT_MS) {
+  setTimeout(() => process.exit(1), Number(process.env.DSH_FAKE_EXIT_MS));
+}
 `,
   );
   // Windows: .cmd 包一层 node;POSIX: sh 脚本
@@ -128,62 +131,87 @@ async function main() {
     (s) => statuses.push({ ...s, t: Date.now() }),
   );
 
-  // ---------- 1) 第一次 ensure:应真正 spawn 并 up ----------
-  const startingSeen = [];
-  const pollStarting = setInterval(() => {
-    if (mgr.status.starting) startingSeen.push(true);
-  }, 50);
-  const first = await mgr.ensure();
-  clearInterval(pollStarting);
-
-  check("第一次 ensure 成功", first.up === true, JSON.stringify(first));
-  check("启动过程中出现 starting=true", startingSeen.length > 0 || statuses.some((s) => s.starting));
-  check("成功后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
-  check("成功后 status.up === true", mgr.status.up === true);
-  check("成功后 status.startedByUs === true", mgr.status.startedByUs === true);
-  check("HTTP 实际可达", (await isListening(url)) === true);
-
-  const spawnCountAfterFirst = logs.filter((l) => l.includes("已启动子进程")).length;
-  check("第一次启动有 spawn 日志", spawnCountAfterFirst === 1, "count=" + spawnCountAfterFirst);
-
-  // ---------- 2) stop:进程树退出 ----------
-  const stopped = await mgr.stop();
-  check("stop 成功", stopped.ok === true, JSON.stringify(stopped));
-  // 等端口真正关掉(子进程树可能略慢)
-  const down = await waitFor(() => isListening(url).then((up) => !up), 5000);
-  check("stop 后 HTTP 已下线", down === true);
-  check("stop 后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
-
-  // ---------- 3) 第二次 ensure:必须重新进入 start() 并成功 ----------
-  // 若 C1 存在:ensure 会误判 this.starting==true,只等待不 spawn,最终 timeout 失败
-  const second = await mgr.ensure();
-  check("第二次 ensure 成功(允许重新启动)", second.up === true, JSON.stringify(second));
-  check("第二次后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
-  check("第二次后 HTTP 再次可达", (await isListening(url)) === true);
-
-  const spawnCountAfterSecond = logs.filter((l) => l.includes("已启动子进程")).length;
-  check("第二次启动再次 spawn(共 2 次)", spawnCountAfterSecond === 2, "count=" + spawnCountAfterSecond);
-
-  // ---------- 4) 子进程异常退出后,starting 不得卡死 ----------
-  await mgr.stop();
-  await waitFor(() => isListening(url).then((up) => !up), 5000);
-
-  // 直接 ensure 第三次
-  const third = await mgr.ensure();
-  check("异常退出/停止后第三次 ensure 成功", third.up === true, JSON.stringify(third));
-  const spawnCountAfterThird = logs.filter((l) => l.includes("已启动子进程")).length;
-  check("第三次也重新 spawn", spawnCountAfterThird === 3, "count=" + spawnCountAfterThird);
-
-  // 收尾
+  let pollStarting;
   try {
+    // ---------- 1) 第一次 ensure:应真正 spawn 并 up ----------
+    const startingSeen = [];
+    pollStarting = setInterval(() => {
+      if (mgr.status.starting) startingSeen.push(true);
+    }, 50);
+    const first = await mgr.ensure();
+    clearInterval(pollStarting);
+
+    check("第一次 ensure 成功", first.up === true, JSON.stringify(first));
+    check("启动过程中出现 starting=true", startingSeen.length > 0 || statuses.some((s) => s.starting));
+    check("成功后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
+    check("成功后 status.up === true", mgr.status.up === true);
+    check("成功后 status.startedByUs === true", mgr.status.startedByUs === true);
+    check("HTTP 实际可达", (await isListening(url)) === true);
+
+    const spawnCountAfterFirst = logs.filter((l) => l.includes("已启动子进程")).length;
+    check("第一次启动有 spawn 日志", spawnCountAfterFirst === 1, "count=" + spawnCountAfterFirst);
+
+    // ---------- 2) stop:进程树退出 ----------
+    const stopped = await mgr.stop();
+    check("stop 成功", stopped.ok === true, JSON.stringify(stopped));
+    // 等端口真正关掉(子进程树可能略慢)
+    const down = await waitFor(() => isListening(url).then((up) => !up), 5000);
+    check("stop 后 HTTP 已下线", down === true);
+    check("stop 后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
+
+    // ---------- 3) 第二次 ensure:必须重新进入 start() 并成功 ----------
+    // 若 C1 存在:ensure 会误判 this.starting==true,只等待不 spawn,最终 timeout 失败
+    const second = await mgr.ensure();
+    check("第二次 ensure 成功(允许重新启动)", second.up === true, JSON.stringify(second));
+    check("第二次后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
+    check("第二次后 HTTP 再次可达", (await isListening(url)) === true);
+
+    const spawnCountAfterSecond = logs.filter((l) => l.includes("已启动子进程")).length;
+    check("第二次启动再次 spawn(共 2 次)", spawnCountAfterSecond === 2, "count=" + spawnCountAfterSecond);
+
+    // ---------- 4) 子进程自行崩溃(全程不调用 stop)后,starting 不得卡死 ----------
+    // 先干净停掉第二个实例,再让下一个子进程 1.5s 后自行退出:
+    // 只有这条路径会走到 exit 回调,与 stop() 内部的复位无关。
     await mgr.stop();
-  } catch {}
-  try {
-    fs.rmSync(tmp, { recursive: true, force: true });
-  } catch {}
-  try {
-    fs.unlinkSync(out);
-  } catch {}
+    await waitFor(() => isListening(url).then((up) => !up), 5000);
+    process.env.DSH_FAKE_EXIT_MS = "1500";
+    let third;
+    try {
+      third = await mgr.ensure();
+    } finally {
+      delete process.env.DSH_FAKE_EXIT_MS;
+    }
+    check("第三次 ensure 成功(崩溃前的实例已起来)", third.up === true, JSON.stringify(third));
+    const spawnCountAfterThird = logs.filter((l) => l.includes("已启动子进程")).length;
+    check("第三次启动再次 spawn(共 3 次)", spawnCountAfterThird === 3, "count=" + spawnCountAfterThird);
+
+    // 等它自己死掉(不调用 stop):这才是 exit 回调路径
+    const crashed = await waitFor(() => isListening(url).then((up) => !up), 8000);
+    check("子进程已自行退出(未调用 stop)", crashed === true);
+    check("崩溃后 status.up === false", mgr.status.up === false, JSON.stringify(mgr.status));
+    check("崩溃后 status.starting === false", mgr.status.starting === false, "starting=" + mgr.status.starting);
+    check("崩溃后 status.startedByUs === false", mgr.status.startedByUs === false, JSON.stringify(mgr.status));
+
+    // 崩溃之后必须还能再拉起来
+    const fourth = await mgr.ensure();
+    check("异常退出后第四次 ensure 成功", fourth.up === true, JSON.stringify(fourth));
+    const spawnCountAfterFourth = logs.filter((l) => l.includes("已启动子进程")).length;
+    check("第四次也重新 spawn(共 4 次)", spawnCountAfterFourth === 4, "count=" + spawnCountAfterFourth);
+  } finally {
+    // 收尾放在 finally:任何断言抛错都要杀掉 detached 子进程并清理临时文件,
+    // 否则假服务器会活过本次测试、占住端口并污染后续运行。
+    if (pollStarting) clearInterval(pollStarting);
+    delete process.env.DSH_FAKE_EXIT_MS;
+    try {
+      await mgr.stop();
+    } catch {}
+    try {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    } catch {}
+    try {
+      fs.unlinkSync(out);
+    } catch {}
+  }
 
   console.log("\n结果:", fail === 0 ? "全部通过" : fail + " 项失败");
   if (fail > 0) {

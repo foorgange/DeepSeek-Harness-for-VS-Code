@@ -124,21 +124,33 @@ export class ServerManager {
         detached: process.platform !== "win32",
       });
       this.startedByUs = true;
-      this.log(`已启动子进程 pid=${this.child.pid ?? "?"}(首次 npx 下载包可能较慢)`);
-      this.child.once("exit", (code, signal) => {
-        exitInfo = `exit code=${code ?? "null"} signal=${signal ?? "none"}`;
+      const child = this.child;
+      this.log(`已启动子进程 pid=${child.pid ?? "?"}(首次 npx 下载包可能较慢)`);
+      // 闭包捕获本次的 child:迟到的旧子进程回调不得改写新一启动的生命周期状态
+      child.once("exit", (code, signal) => {
+        const info = `exit code=${code ?? "null"} signal=${signal ?? "none"}`;
+        if (this.child !== child) {
+          this.log(`旧子进程退出(已被新的启动流程取代): ${info}`);
+          return;
+        }
+        exitInfo = info;
         childExited = true;
-        this.log(`子进程退出: ${exitInfo}`);
+        this.log(`子进程退出: ${info}`);
         this.child = undefined;
         this.startedByUs = false;
         // 退出后必须复位 starting,否则 ensure() 会误判“启动流程仍在进行”而拒绝再次 spawn
         this.starting = false;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
-      this.child.once("error", (error) => {
-        exitInfo = `spawn error: ${error.message}`;
+      child.once("error", (error) => {
+        const info = `spawn error: ${error.message}`;
+        if (this.child !== child) {
+          this.log(`旧子进程错误(已被新的启动流程取代): ${info}`);
+          return;
+        }
+        exitInfo = info;
         childExited = true;
-        this.log(`子进程启动失败: ${exitInfo}`);
+        this.log(`子进程启动失败: ${info}`);
         this.child = undefined;
         this.startedByUs = false;
         this.starting = false;
