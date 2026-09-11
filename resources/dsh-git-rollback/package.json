@@ -34,7 +34,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test test/git.test.mjs",
+    "test": "node --test test/rollback-clean.test.mjs",
     "prepublishOnly": "npm run build && npm test"
   }
 }

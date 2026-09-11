@@ -30,16 +30,18 @@ export function parseTurnArg(rawInput) {
  * 内容级恢复:把工作区+索引恢复成 commit 的树,HEAD/分支引用不动。
  * read-tree 遇未跟踪文件阻碍时先 clean -fd 再重试;最后 reset --quiet 把索引还原回 HEAD
  * (检查点树里"当时未跟踪、现已被还原"的文件重新显示为未跟踪,不污染暂存区)。
+ * clean 必须排除 .dsh/rollback:检查点快照故意不收录该目录,否则回退会删掉所有会话的记录文件。
  */
 async function restoreTreeContent(gitBin, cwd, commit) {
+    const cleanArgs = ["clean", "-fd", "--exclude=.dsh/rollback"];
     const first = await gitExec(gitBin, cwd, ["read-tree", "--reset", "-u", commit]);
     if (!first.ok) {
-        await gitExec(gitBin, cwd, ["clean", "-fd"]);
+        await gitExec(gitBin, cwd, cleanArgs);
         const retry = await gitExec(gitBin, cwd, ["read-tree", "--reset", "-u", commit]);
         if (!retry.ok)
             return { ok: false, reason: `read-tree: ${retry.stderr || first.stderr || "failed"}` };
     }
-    const clean = await gitExec(gitBin, cwd, ["clean", "-fd"]);
+    const clean = await gitExec(gitBin, cwd, cleanArgs);
     const reset = await gitExec(gitBin, cwd, ["reset", "--quiet"]);
     if (!clean.ok || !reset.ok)
         return { ok: false, reason: `clean/reset: ${clean.stderr || reset.stderr || ""}`.trim() };
