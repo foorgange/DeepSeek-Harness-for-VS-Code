@@ -131,6 +131,8 @@ export class ServerManager {
         this.log(`子进程退出: ${exitInfo}`);
         this.child = undefined;
         this.startedByUs = false;
+        // 退出后必须复位 starting,否则 ensure() 会误判“启动流程仍在进行”而拒绝再次 spawn
+        this.starting = false;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
       this.child.once("error", (error) => {
@@ -139,6 +141,7 @@ export class ServerManager {
         this.log(`子进程启动失败: ${exitInfo}`);
         this.child = undefined;
         this.startedByUs = false;
+        this.starting = false;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
     } catch (error) {
@@ -153,6 +156,8 @@ export class ServerManager {
     while (Date.now() < deadline) {
       if (await this.isUp(800)) {
         this.log("服务器已就绪");
+        // 成功就绪后复位 starting;否则本次 ensure 返回后,下一次 ensure 永远走等待分支
+        this.starting = false;
         return { ok: true };
       }
       // 子进程提前退出:不再傻等,立即失败并给出退出码(如端口被占用 / npx 报错 / 环境拦截)
@@ -324,6 +329,7 @@ export class ServerManager {
     }
     this.startedByUs = false;
     this.child = undefined;
+    this.starting = false;
     this.setStatus({ up: false, startedByUs: false, starting: false });
     return { ok: true };
   }
