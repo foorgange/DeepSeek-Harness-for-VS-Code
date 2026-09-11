@@ -1,11 +1,11 @@
 // SessionStore 投影 emit 链路测试(esbuild 编译后运行)
 // 用法: node tests/smoke/store.test.js
-const { buildSync } = require("C:/Users/lihe4/Downloads/DeepSeek-Harness-for-VS-Code/node_modules/esbuild");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const repo = path.resolve(__dirname, "..", "..");
 const out = path.join(os.tmpdir(), "store-test-" + process.pid + ".cjs");
+const { buildSync } = require(path.join(repo, "node_modules/esbuild"));
 buildSync({
   entryPoints: [path.join(repo, "src/dsh/sessionStore.ts")],
   bundle: true,

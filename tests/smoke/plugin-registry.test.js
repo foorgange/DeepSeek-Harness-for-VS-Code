@@ -1,11 +1,11 @@
 // pluginRegistry 读写 cordis.patch.yml 的冒泡测试(bundle 层 + 注入器 registry + profile patch 合成)
 // 用法: node tests/smoke/plugin-registry.test.js
-const { buildSync } = require("C:/Users/lihe4/Downloads/DeepSeek-Harness-for-VS-Code/node_modules/esbuild");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const repo = path.resolve(__dirname, "..", "..");
 const out = path.join(os.tmpdir(), "registry-test-" + process.pid + ".cjs");
+const { buildSync } = require(path.join(repo, "node_modules/esbuild"));
 buildSync({
   entryPoints: [path.join(repo, "src/dsh/pluginRegistry.ts")],
   bundle: true,
