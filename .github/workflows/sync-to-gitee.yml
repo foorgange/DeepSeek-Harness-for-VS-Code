@@ -1,33 +1,22 @@
 name: Sync to Gitee
-
 on:
   push:
-    branches: [''**'']
-    tags: [''**'']
+    branches: ["**"]
+    tags: ["**"]
   workflow_dispatch:
-
 permissions:
   contents: read
-
-concurrency:
-  group: sync-to-gitee
-  cancel-in-progress: true
-
 jobs:
-  mirror:
+  sync:
     runs-on: ubuntu-latest
     steps:
-      - name: Mirror repository to Gitee
-        shell: bash
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Push branches and tags to Gitee
         env:
-          GH_TOKEN: ${{ github.token }}
           GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
           GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
-          GITEE_OWNER: snowfoootball
-          REPOSITORY_NAME: ${{ github.event.repository.name }}
         run: |
-          set -euo pipefail
-          git clone --mirror "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" repository.git
-          cd repository.git
-          git remote add gitee "https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/${GITEE_OWNER}/${REPOSITORY_NAME}.git"
-          git push --mirror gitee
+          git remote add gitee "https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/${GITEE_USERNAME}/${GITHUB_REPOSITORY#*/}.git"
+          git push gitee 'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
