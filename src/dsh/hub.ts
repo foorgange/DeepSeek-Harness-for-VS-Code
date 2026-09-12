@@ -152,6 +152,10 @@ export class DshHub {
     const handle = await createAdapter(this.deps.url, {
       protocol: this.deps.protocol,
       launchToken: () => this.server.token ?? this.launchToken,
+      // 服务端先开端口、后打印令牌,而这个适配器只解析一次鉴权 —— 晚到的令牌必须在这里
+      // 等回来,否则「抓不到令牌就退回凭据派生」等于白抓。等待是有界的,且服务端不是
+      // 本扩展拉起时会立刻返回(见 ServerManager.waitForToken)。
+      waitForLaunchToken: (timeoutMs) => this.server.waitForToken(timeoutMs),
       manualCookie: this.deps.manualCookie,
       deriveFromCredentials: this.deps.deriveAuthFromCredentials,
       onLog: this.deps.onLog,

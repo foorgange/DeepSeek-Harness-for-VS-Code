@@ -44,6 +44,12 @@ const AUTH_RECORD_KEY = "client-connection/browser-session";
 const CLOCK_SKEW_MS = 5 * 60_000;
 const WINDOW_MS = 24 * 60 * 60_000 - 2 * CLOCK_SKEW_MS;
 
+/**
+ * 最后一条路(`waitForLaunchToken`)的等待上限。
+ * 令牌那行在整棵插件树 `loader.await()` 之后才打印,冷启动实测在秒级;3 秒兜不住也不致命。
+ */
+const LAUNCH_TOKEN_WAIT_MS = 3000;
+
 export type AuthSource = "token" | "secret" | "none";
 
 export interface DshAuth {
@@ -157,10 +163,20 @@ export async function exchangeLaunchToken(baseUrl: string, token: string, timeou
  * 关掉它,那部分用户在 0.1.5 上会完全用不了。读取范围限于
  * `client-connection/browser-session` 这一条记录的 secret,只用于给本机地址签 Cookie,
  * 不会出现在任何网络请求里(除发给同一个 loopback 服务端本身);用户可在设置里关闭。
+ *
+ * `waitForLaunchToken` 是**最后**一步:上面三条路径全部拿不到凭据时才调用它。
+ * 放最后而不是放最前,是因为它要等(服务端先开端口、后打印令牌),而无条件等会让
+ * 0.1.1 用户每次冷启动白等满 —— 0.1.1 根本不打印令牌。放在这里就只在「本来一个凭据都
+ * 没有」时才付出等待,而那种情况下等待严格优于直接放弃。
  */
 export async function resolveAuth(
   baseUrl: string,
-  opts: { launchToken?: string; manualCookie?: string; allowCredentialFile?: boolean } = {},
+  opts: {
+    launchToken?: string;
+    manualCookie?: string;
+    allowCredentialFile?: boolean;
+    waitForLaunchToken?: (timeoutMs: number) => Promise<string | undefined>;
+  } = {},
 ): Promise<DshAuth | undefined> {
   const authority = authorityOf(baseUrl);
 
@@ -173,10 +189,17 @@ export async function resolveAuth(
     if (cookie) return { authority, cookie, via: "token" };
   }
 
-  if (opts.allowCredentialFile === false) return undefined;
+  if (opts.allowCredentialFile !== false) {
+    const secret = readBrowserSessionSecret();
+    if (secret) return { authority, cookie: signCookie(secret, authority), via: "secret" };
+  }
 
-  const secret = readBrowserSessionSecret();
-  if (secret) return { authority, cookie: signCookie(secret, authority), via: "secret" };
+  // 一条路都没走通。若服务端是本扩展拉起的,令牌可能只是还没打印出来 —— 再给一次机会。
+  const late = await opts.waitForLaunchToken?.(LAUNCH_TOKEN_WAIT_MS);
+  if (late) {
+    const cookie = await exchangeLaunchToken(baseUrl, late);
+    if (cookie) return { authority, cookie, via: "token" };
+  }
 
   return undefined;
 }

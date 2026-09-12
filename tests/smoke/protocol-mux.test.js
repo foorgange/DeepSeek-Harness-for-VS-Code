@@ -58,6 +58,26 @@ async function listen() {
   };
 }
 
+/** 起一个**拒绝升级**的 ws 服务端(模拟 0.1.5 门禁对未认证握手回的那一记 401)。 */
+async function listenRejecting(statusCode = 401) {
+  const attempts = { n: 0 };
+  const wss = new WebSocketServer({
+    host: "127.0.0.1",
+    port: 0,
+    verifyClient: (_info, cb) => {
+      attempts.n += 1;
+      cb(false, statusCode, "Unauthorized");
+    },
+  });
+  await new Promise((r) => wss.once("listening", r));
+  const { port } = wss.address();
+  return {
+    url: `http://127.0.0.1:${port}`,
+    attempts: () => attempts.n,
+    close: () => new Promise((r) => wss.close(() => r())),
+  };
+}
+
 /** 鉴权解析**故意慢**,把 await 的窗口撑开到肉眼可见 —— 缺陷就在那个窗口里。 */
 function slowAuth(store, delayMs = 60) {
   return async () => {
@@ -131,6 +151,40 @@ async function main() {
     mux.connect();
     await sleep(300);
     check("dispose 后 connect() 无操作", server.count() === 2, `${server.count()} 条连接`);
+    await server.close();
+  }
+
+  // ---------- 3. 握手被拒(401):不许卡死,必须继续重试 ----------
+  // 这一条压的是一个**实测撞到过**的缺陷。ws 的源码里写的是
+  //   `else if (!websocket.emit('unexpected-response', req, res)) abortHandshake(...)`
+  // —— 只要挂了监听器,emit 就返回 true,abortHandshake **不会**执行;于是这个握手既不
+  // emit 'error' 也不 emit 'close'。修复前只打一行日志,后果是:this.socket 永远指着这条
+  // 僵在 CONNECTING 的连接,kick() 的 `this.socket !== undefined` 守卫让之后每一次
+  // connect() 都成为空操作,scheduleReconnect() 也永远不会被排期 —— 整条 mux 连同它承载的
+  // $events(审批/提问)、session/control(队列/投影)、workspace/follow 和每条 session/follow
+  // 一起永久死亡。界面上就是「消息发出去一直转圈、审批卡永不弹」,而服务端其实早答完了。
+  {
+    const server = await listenRejecting(401);
+    let unauthorized = 0;
+    const mux = new muxMod.RemoteMux({
+      baseUrl: server.url,
+      auth: slowAuth({ calls: 0 }, 0),
+      onState: () => {},
+      onUnauthorized: () => { unauthorized += 1; },
+      onLog: () => {},
+    });
+    mux.connect();
+    await sleep(300);
+    check("握手 401 后不卡在 connecting", mux.currentState !== "connecting", mux.currentState);
+    check("握手 401 触发了 onUnauthorized", unauthorized >= 1, `${unauthorized} 次`);
+
+    // 退避基准 500ms,等够两轮:握手尝试次数必须真的增长(修复前恒为 1)
+    await sleep(2500);
+    check("握手 401 之后仍在继续重试", server.attempts() >= 2, `握手尝试 ${server.attempts()} 次`);
+
+    mux.dispose();
+    await sleep(200);
+    check("握手 401 场景下 dispose 仍能收干净", mux.currentState === "disconnected", mux.currentState);
     await server.close();
   }
 

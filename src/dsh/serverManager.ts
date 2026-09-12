@@ -153,23 +153,38 @@ export class ServerManager {
         logFd = undefined;
       }
       this.startedByUs = true;
-      this.log(`已启动子进程 pid=${this.child.pid ?? "?"}(首次 npx 下载包可能较慢)`);
-      this.child.once("exit", (code, signal) => {
-        exitInfo = `exit code=${code ?? "null"} signal=${signal ?? "none"}`;
+      const child = this.child;
+      this.log(`已启动子进程 pid=${child.pid ?? "?"}(首次 npx 下载包可能较慢)`);
+      // 闭包捕获本次的 child:迟到的旧子进程回调不得改写新一启动的生命周期状态
+      child.once("exit", (code, signal) => {
+        const info = `exit code=${code ?? "null"} signal=${signal ?? "none"}`;
+        if (this.child !== child) {
+          this.log(`旧子进程退出(已被新的启动流程取代): ${info}`);
+          return;
+        }
+        exitInfo = info;
         childExited = true;
-        this.log(`子进程退出: ${exitInfo}`);
+        this.log(`子进程退出: ${info}`);
         this.child = undefined;
         this.startedByUs = false;
         this.launchToken = undefined;
+        // 退出后必须复位 starting,否则 ensure() 会误判“启动流程仍在进行”而拒绝再次 spawn
+        this.starting = false;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
-      this.child.once("error", (error) => {
-        exitInfo = `spawn error: ${error.message}`;
+      child.once("error", (error) => {
+        const info = `spawn error: ${error.message}`;
+        if (this.child !== child) {
+          this.log(`旧子进程错误(已被新的启动流程取代): ${info}`);
+          return;
+        }
+        exitInfo = info;
         childExited = true;
-        this.log(`子进程启动失败: ${exitInfo}`);
+        this.log(`子进程启动失败: ${info}`);
         this.child = undefined;
         this.startedByUs = false;
         this.launchToken = undefined;
+        this.starting = false;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
     } catch (error) {
@@ -193,13 +208,22 @@ export class ServerManager {
     while (Date.now() < deadline) {
       if (await this.isUp(800)) {
         this.log("服务器已就绪");
-        // 「端口通了」和「令牌那行已经落盘」是两件事,而且差得不短:dsh-web-app 是先
-        // listen、再等整棵插件树 `loader.await()` 结束才 announceReady() 打印那行 URL
-        // (node_modules/@deepseek-ai/dsh-web-app/lib/index.js:194-215)。所以这一次 isUp
-        // 很可能正好赶在打印之前 —— 只抓一次就会漏。
-        // 漏掉的代价不小:0.1.5 上就只剩凭据派生一条鉴权路,那条路一旦被关掉(或凭据文件
-        // 不在),适配器会缓存住 legacy 的结论,面板得重载窗口才能恢复。所以这里给有界重试。
-        await this.captureLaunchTokenWithRetry();
+        this.captureLaunchToken();
+        // 注意:这里**不**等令牌落盘。dsh-web-app 是先 listen、再等整棵插件树
+        // `loader.await()` 结束才 announceReady() 打印那行 URL
+        // (node_modules/@deepseek-ai/dsh-web-app/lib/index.js:194-215),所以此刻它多半还没打印。
+        // 但等待不能放在这儿:start() 的返回时刻是 ensure() 的契约(调用方据此认定
+        // 「刚拉起的服务端是活的」),拖长它就会把「启动即崩」误判成「启动成功」。
+        // 等待放在真正的消费端 —— ServerManager.waitForToken(),由 createAdapter 调用。
+        // 子进程在这几行之间就死掉的话,exit 回调已经复位了 up/startedByUs,而 ensure() 拿到
+        // ok 之后会**无条件**再写回 up=true —— 面板显示「已连接」而端口上其实什么都没有,
+        // stop() 还会去杀一个已经不存在的 pid。所以这里绝不能报成功。
+        if (childExited) {
+          this.log(`子进程在就绪的同时退出(${exitInfo}),按启动失败处理`);
+          break;
+        }
+        // 成功就绪后复位 starting;否则本次 ensure 返回后,下一次 ensure 永远走等待分支
+        this.starting = false;
         return { ok: true };
       }
       // 令牌在服务端就绪前就打印了,顺路截获,省一次读盘
@@ -382,17 +406,28 @@ export class ServerManager {
   }
 
   /**
-   * 就绪之后再给启动令牌一点落盘时间(最多约 1.5 秒),抓到就立刻返回。
+   * 等启动令牌落盘,最多 `timeoutMs`;抓到就立刻返回,超时返回 undefined。
    *
-   * 这条重试只在**本扩展真的 spawn 了一个服务端**之后才跑 —— 服务端本来就在跑的话
-   * `ensure()` 走 `isUp()` 快速路径,根本不会进 `start()`。所以它不会给「连一个已经在
-   * 运行的服务器」这条常见路径加任何延迟;而 0.1.1 本来就不打印令牌,最坏也只是冷启动
-   * 多等 1.5 秒(冷启动本身已经是秒级到分钟级的事)。
+   * 为什么需要等:dsh-web-app 是先 listen、再等整棵插件树 `loader.await()` 结束才
+   * announceReady() 打印那行带 token 的 URL(index.js:194-215),所以「端口通了」比
+   * 「令牌可读」早 —— 早多少取决于插件树要加载多久,冷启动可能到秒级。
+   *
+   * 为什么等待放在这里而不是 start() 里:start() 的返回时刻是 ensure() 的契约,调用方
+   * 据此认定「刚拉起的服务端是活的」。在 start() 里等,就会把「启动即崩」的服务端也
+   * 报成启动成功(exit 回调复位过的 up 会被 ensure() 再写回 true)。而这里纯属消费端的
+   * 耐心,等不到也只是退回凭据派生那条鉴权路,不影响任何生命周期判断。
+   *
+   * 只对**本扩展自己拉起的**服务端有意义:服务端本来就在跑时 this.logPath 是
+   * undefined,循环第一次就返回 —— 不会给「连一个已在运行的服务器」加任何延迟。
    */
-  private async captureLaunchTokenWithRetry(): Promise<void> {
-    for (let attempt = 0; attempt < 6; attempt++) {
+  async waitForToken(timeoutMs: number): Promise<string | undefined> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
       this.captureLaunchToken();
-      if (this.launchToken !== undefined) return;
+      if (this.launchToken !== undefined) return this.launchToken;
+      // 日志文件都没有(非本扩展启动)或子进程已经没了 —— 再等也不会出现令牌
+      if (this.logPath === undefined || this.child === undefined) return undefined;
+      if (Date.now() >= deadline) return undefined;
       await sleep(250);
     }
   }
@@ -455,6 +490,7 @@ export class ServerManager {
     this.startedByUs = false;
     this.child = undefined;
     this.launchToken = undefined;
+    this.starting = false;
     this.setStatus({ up: false, startedByUs: false, starting: false });
     return { ok: true };
   }

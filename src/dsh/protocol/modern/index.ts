@@ -55,6 +55,11 @@ import type {
 export interface ModernClientOptions {
   /** 每次请求前取鉴权;返回 undefined 表示暂时拿不到(会以无凭据发出,由 401 兜底)。 */
   auth: () => Promise<DshAuth | undefined>;
+  /**
+   * 服务端明确拒绝了当前凭据(握手 401/403)。上层据此作废缓存、下次重新解析 ——
+   * 少了它,一次过期就是永久 401,只能重载窗口。
+   */
+  onAuthRejected?: () => void;
   /** 诊断日志。 */
   onLog?: (message: string) => void;
 }
@@ -273,7 +278,11 @@ export class ModernApiClient {
         auth: this.opts.auth,
         onState: (state) => this.onState?.("mux", state === "disconnected" ? "disconnected" : state),
         onLog: (message) => this.opts.onLog?.(message),
-        onUnauthorized: () => this.opts.onLog?.("[protocol] remote.mux 鉴权被拒(401)"),
+        onUnauthorized: () => {
+          this.opts.onLog?.("[protocol] remote.mux 鉴权被拒(401/403),作废当前凭据,重连时重新解析");
+          // 不作废的话,重连会拿着同一个过期 Cookie 一直撞 401 —— 修好重连却仍然自愈不了。
+          this.opts.onAuthRejected?.();
+        },
       });
       this.events = new RemoteEvents(this.mux, {
         ...sink,

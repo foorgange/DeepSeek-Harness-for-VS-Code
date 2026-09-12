@@ -155,15 +155,29 @@ export class RemoteMux {
       for (const streamId of this.streams.keys()) this.sendOpen(streamId);
     });
     ws.on("message", (data) => this.onMessage(data));
-    ws.on("unexpected-response", (_req, res) => {
-      if (res.statusCode === 401) {
-        this.log("服务端返回 401,鉴权凭据失效");
-        this.cfg.onUnauthorized?.();
-      } else {
-        this.log(`握手被拒: HTTP ${res.statusCode}`);
-      }
-    });
     ws.on("error", (error) => this.log(`socket 错误: ${error.message}`));
+    ws.on("unexpected-response", (_req, res) => {
+      // 这里必须自己收尾。ws 的源码是
+      //   `else if (!websocket.emit('unexpected-response', req, res)) abortHandshake(...)`
+      // —— 有监听器时 emit 返回 true,abortHandshake 就**不会**执行,于是既不 emit 'error'
+      // 也不 emit 'close'。只打一行日志的话:this.socket 会永远指着这条僵在 CONNECTING 的
+      // 连接,kick() 的 `this.socket !== undefined` 守卫让之后每次 connect 都变成空操作,
+      // scheduleReconnect 也永远不会被排期 —— 整条 mux 连同它承载的 $events(审批/提问)、
+      // session/control(队列/投影)、workspace/follow、每条 session/follow 一起永久死亡。
+      // 界面上就是「消息发出去一直转圈、审批卡永不弹」,而服务端其实早就答完了。
+      this.log(res.statusCode === 401 || res.statusCode === 403 ? `握手被拒: HTTP ${res.statusCode}(鉴权凭据未被接受)` : `握手被拒: HTTP ${res.statusCode}`);
+      res.resume(); // 丢掉响应体并放掉这条 TCP,否则连接不会被回收
+      if (this.socket === ws) this.socket = undefined;
+      if (this.disposed) return;
+      this.setState("disconnected");
+      if (res.statusCode === 401 || res.statusCode === 403) this.cfg.onUnauthorized?.();
+      try {
+        ws.terminate();
+      } catch {
+        /* 已经死了就算了 */
+      }
+      this.scheduleReconnect();
+    });
     ws.on("close", (code, reason) => {
       if (this.socket === ws) this.socket = undefined;
       if (this.disposed) return;
