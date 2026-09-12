@@ -11,8 +11,18 @@ out/
 *.vsix
 Releases/
 
+# --- 帧翻译层的回归夹具是真实会话录制,不推进仓库 ---
+# tools/record-mux.ts 录下来的是**真实会话**:里面带着录制者的本机路径、工作区名和
+# 对话内容。每个人的录制都不一样,而且那是私人数据,不该进公开仓库。缺夹具时
+# protocol-frames / protocol-history 里 fixture 驱动的那一节会自动跳过(并提示先录制),
+# 其余断言照跑。要跑满就在自己机器上 node tools/record-mux.ts 录一份。
+tests/fixtures/
+
 # --- DSH agent session snapshots (local data, never push) ---
 .dsh-snapshots/
+# 回退插件在本工作区跑过的会话留下的检查点数据,是运行时状态不是源码。
+# 不忽略的话每次在本仓库里用 dsh 都会往 git status 里塞一堆 session-*.json。
+.dsh/
 
 # --- IDE / editor settings ---
 .vscode/

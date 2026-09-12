@@ -20,7 +20,7 @@ import type {
   ApprovalAnswer,
   QuestionAnswer,
   SubagentEntry,
-} from "./types";
+} from "../../types";
 
 export class DshApiError extends Error {
   constructor(

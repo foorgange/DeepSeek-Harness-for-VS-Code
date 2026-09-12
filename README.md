@@ -4,7 +4,7 @@
 
 在 VS Code 中直接使用 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)(`dsh`)——完整聊天界面、`@dsh` 内置聊天参与者、回合级 Git 回退,与 Web 端实时双向同步。
 
-[![Version](https://img.shields.io/badge/version-0.11.1-blue)](https://github.com/foorgange/DeepSeek-Harness-for-VS-Code/releases)
+[![Version](https://img.shields.io/badge/version-0.12.5-blue)](https://github.com/foorgange/DeepSeek-Harness-for-VS-Code/releases)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%3E%3D1.90-007acc)](https://code.visualstudio.com)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-win%20%7C%20mac%20%7C%20linux-lightgrey)](https://github.com/foorgange/DeepSeek-Harness-for-VS-Code)
@@ -97,6 +97,21 @@ Download the latest `.vsix` from [Releases](https://github.com/foorgange/DeepSee
 
 **Requirements**: VS Code 1.90+; `dsh` available on the machine (the server auto-starts, or run `dsh web` manually).
 
+### dsh version compatibility (0.12.5+)
+
+This extension speaks **both** generations of the dsh protocol and picks the right one by itself:
+
+- **dsh 0.1.1** — dotted routes, `events.mux` + `events.host`, no authentication.
+- **dsh 0.1.5+** — slash routes, a single multiplexed `remote.mux` socket, and a mandatory browser-session cookie on every `/api` route.
+
+There is nothing to configure in the normal case. Three settings cover the unusual ones:
+
+| Setting | When you would touch it |
+|---|---|
+| `dsh.protocol` | Troubleshooting only. `auto` (default) probes the server and picks the generation that actually answers. Force `legacy` or `modern` only if detection gets it wrong. |
+| `dsh.deriveAuthFromCredentials` | **On by default.** Required when the server was started *outside* VS Code (e.g. `dsh web` in a terminal) — it is the only way past the 0.1.5 request gate. The extension reads exactly one record, the `client-connection/browser-session` secret, from `<DSH_HOME>/.credentials.yaml` and uses it to sign a cookie for the **loopback** address. That cookie goes to that same local server and nowhere else. Turn the setting off to forbid reading that file. |
+| `dsh.authToken` | Advanced / troubleshooting: paste a full browser-session cookie (`dsh-auth-xxxx=v1.…`) to override all other authentication. |
+
 ## Usage
 
 1. Open any folder — it is auto-adopted as a DSH workspace
@@ -118,7 +133,9 @@ Download the latest `.vsix` from [Releases](https://github.com/foorgange/DeepSee
 npm install
 npm run typecheck     # type checking
 npm run build         # esbuild → dist/
-npm test              # smoke tests (store / render / artifact / plugin registry / settings)
+npm test              # smoke tests (session store / webview render / packaging / plugin registry /
+                      #   rollback-plugin upgrade migration / settings panel /
+                      #   protocol: args, auth, mux, frames, history, models)
 npm run package       # build and package .vsix into Releases/
 ```
 
@@ -197,6 +214,21 @@ VS Code → 扩展 → 右上角 `...` → **从 VSIX 安装**。
 
 **要求**:VS Code 1.90+;本机可运行 `dsh`(服务器自动启动,或手动 `dsh web`)。
 
+### dsh 版本兼容(0.12.5 起)
+
+扩展**同时会讲两代** dsh 协议,并自己选用对的那一代:
+
+- **dsh 0.1.1** —— 点号路由、`events.mux` + `events.host` 双 WebSocket、无鉴权。
+- **dsh 0.1.5+** —— 斜杠路由、单条 `remote.mux` 复用流,且所有 `/api` 路由强制校验浏览器会话 Cookie。
+
+正常情况下无需任何配置。只有特殊场景才会碰下面三个设置项:
+
+| 设置项 | 什么时候需要动它 |
+|---|---|
+| `dsh.protocol` | 仅排障用。默认 `auto` 会实测服务端、选用真正有应答的那一代;只有在探测选错时才需要强制 `legacy` / `modern`。 |
+| `dsh.deriveAuthFromCredentials` | **默认开启。** 当服务端**不是**由 VS Code 启动时(例如你在终端里敲 `dsh web`),这是通过 0.1.5 请求门禁的唯一办法。扩展只会从 `<DSH_HOME>/.credentials.yaml` 读取 `client-connection/browser-session` **这一条**记录的密钥,用于给**本机回环地址**签一个 Cookie;该 Cookie 只会发给同一个本地服务端,不发往任何其它地方。关闭此设置即禁止读取该文件。 |
+| `dsh.authToken` | 仅供高级排障:直接填入完整的浏览器会话 Cookie(`dsh-auth-xxxx=v1.…`),覆盖其它所有鉴权方式。 |
+
 ## 使用
 
 1. 打开任意文件夹,扩展自动把该文件夹同步为 DSH 工作区
@@ -218,7 +250,8 @@ VS Code → 扩展 → 右上角 `...` → **从 VSIX 安装**。
 npm install
 npm run typecheck     # 类型检查
 npm run build         # esbuild 构建 dist/
-npm test              # 冒烟测试(store 链路 / 渲染 / 产物 / 插件注册表 / 设置面板)
+npm test              # 冒烟测试(会话存储 / 界面渲染 / 打包产物 / 插件注册表 / 回退插件升级迁移 /
+                      #   设置面板 / 协议层:参数表、鉴权、mux 传输、帧合成、历史、模型合成)
 npm run package       # 构建并打包 .vsix 到 Releases/
 ```
 

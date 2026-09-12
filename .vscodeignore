@@ -1,6 +1,12 @@
 .vscode/**
 .vscode-test/**
 .dsh-snapshots/**
+# 回退插件在**当前工作区**留下的检查点记录。它们是运行时产物不是源码,而且每个都带着
+# 打包者本机的绝对路径、git commit 和**未跟踪文件清单** —— 打进 vsix 发出去就是把开发
+# 者的目录结构和未发布改动一起公开。谁在用过 dsh 的工作区里打包都会中招,所以必须排除。
+.dsh/**
+# 仓库的 CI 配置,扩展运行时不需要(0.12.5 之前它就一直在包里,属于历史遗漏)。
+.github/**
 src/**
 node_modules/**
 esbuild.mjs
@@ -10,4 +16,8 @@ tsconfig.json
 .gitignore
 tools/**
 tests/**
+# 开发期的独立入口(探针/录制/集成测试)。它们各自都是完整 bundle,加起来比扩展本体
+# 还大,而运行时一个都用不到 —— extension.js 已经把需要的东西全打进去了。
 dist/test.js
+dist/probe*.js
+dist/record.js

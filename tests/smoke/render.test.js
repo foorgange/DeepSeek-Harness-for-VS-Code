@@ -239,6 +239,68 @@ async function main() {
     check("init 后列表视图替换占位", !!d2.querySelector(".list-view") && !d2.querySelector(".list-flash"));
   }
 
+  // 模型 / 思考深度 / 预设三个胶囊 —— 喂的是 modern 适配器**真合成出来的**值
+  // (`synthesizeModels`)与 `listSessions` 回填进来的 `agentPreset`。
+  //
+  // 这一节压的是 S6 验收点的「界面那一半」:适配器形状对了,菜单就得真的列得出来。
+  // 用真的合成函数而不是手写一个字面量,是因为漂移正是要防的东西 —— 哪天
+  // `synthesizeModels` 少给了一个字段,这里就红,而不是等用户打开菜单才发现是空的。
+  {
+    const { buildSync } = require(path.join(repo, "node_modules", "esbuild"));
+    const os = require("os");
+    const out = path.join(os.tmpdir(), `models-render-${process.pid}.cjs`);
+    buildSync({ entryPoints: [path.join(repo, "src/dsh/protocol/modern/models.ts")], bundle: true, platform: "node", format: "cjs", outfile: out, logLevel: "silent" });
+    const { synthesizeModels } = require(out);
+
+    dispatch("init", { mode: "chat", locked: true, lang: "zh-cn", status: { connected: true }, sessions: [{ sessionId: "s1", title: "会话A", agentPreset: "standard" }], current: "s1", events: [], approvals: [], questions: [], running: false, goal: undefined, context: undefined, permissions: undefined, stats: undefined, todos: [], hasMore: false, queue: [] });
+    dispatch("presets", { value: { presets: [{ id: "standard", name: "标准", isDefault: true }, { id: "minimal", name: "极简", isDefault: false }], authorable: true } });
+    await wait(50);
+
+    // 目录:两个厂商(才有多组标题那一路)、当前选中 deepseek-flash/high。
+    const catalog = {
+      default: { provider: "deepseek-official", model: "deepseek-flash", reasoningEffort: "high" },
+      routableProviders: ["deepseek-official", "sense-nova"],
+      groups: [
+        { id: "deepseek-official", name: "DeepSeek", models: [{ id: "deepseek-flash", name: "Flash", reasoning: { efforts: [{ id: "off", name: "关闭" }, { id: "low", name: "低" }, { id: "high", name: "高" }], defaultEffort: "high" } }, { id: "deepseek-pro", name: "Pro" }] },
+        { id: "sense-nova", name: "SenseNova", models: [{ id: "sensenova-1", name: "SN1" }] },
+      ],
+      failures: [{ id: "broken", name: "Broken", message: "连不上" }],
+    };
+    dispatch("models", { sessionId: "s1", value: synthesizeModels(catalog, undefined) });
+    await wait(50);
+
+    const capsule = (title) => document.querySelector(`.tool-pop[title="${title}"]`);
+    const valueOf = (title) => capsule(title)?.querySelector(".tool-pop-value")?.textContent ?? "(找不到该胶囊)";
+    const itemsOf = (title) => Array.from(capsule(title)?.querySelectorAll(".tool-pop-item") ?? []);
+
+    const model = capsule("模型");
+    check("找得到模型胶囊", !!model);
+    check("模型胶囊显示当前模型的 display name(不是 id、不是 —)", valueOf("模型") === "Flash", valueOf("模型"));
+    check("模型胶囊不禁用(目录非空)", model?.classList.contains("disabled") !== true);
+    const modelItems = itemsOf("模型");
+    check("模型菜单列出全部 3 个模型", modelItems.length === 3, modelItems.map((n) => n.textContent).join(" | "));
+    check("模型菜单的分组标题有两个厂商", Array.from(capsule("模型")?.querySelectorAll(".tool-pop-group") ?? []).length === 2);
+    check("当前模型那项带 active", modelItems.filter((n) => n.classList.contains("active")).length === 1 && (modelItems.find((n) => n.classList.contains("active"))?.textContent ?? "").includes("Flash"), modelItems.map((n) => `${n.textContent}${n.classList.contains("active") ? "*" : ""}`).join(" | "));
+
+    const thinking = capsule("思考深度(推理强度)");
+    check("找得到思考深度胶囊", !!thinking);
+    check("思考深度胶囊显示当前深度的名字(不是 id)", valueOf("思考深度(推理强度)") === "高", valueOf("思考深度(推理强度)"));
+    const thinkItems = itemsOf("思考深度(推理强度)");
+    check("思考深度菜单 = 3 个 efforts + 1 个「默认」", thinkItems.length === 4, thinkItems.map((n) => n.textContent).join(" | "));
+    check("当前深度那项带 active", (thinkItems.find((n) => n.classList.contains("active"))?.textContent ?? "").includes("高"), thinkItems.map((n) => `${n.textContent}${n.classList.contains("active") ? "*" : ""}`).join(" | "));
+
+    const preset = capsule("Agent 预设");
+    check("找得到预设胶囊", !!preset);
+    check("预设胶囊显示 listSessions 回填的 agentPreset 的名字", valueOf("Agent 预设") === "标准", valueOf("Agent 预设"));
+    check("预设胶囊不置灰(会话有预设)", preset?.querySelector(".tool-pop-value")?.classList.contains("muted") !== true);
+
+    // 没有 current 时(比如会话从没选过模型)三个胶囊都该是「—」而不是崩掉
+    dispatch("models", { sessionId: "s1", value: synthesizeModels({ default: undefined, routableProviders: [], groups: [], failures: [] }, undefined) });
+    await wait(50);
+    check("目录为空时模型胶囊显示占位并禁用", capsule("模型")?.classList.contains("disabled") === true);
+    check("空目录下思考深度菜单只剩「默认」", itemsOf("思考深度(推理强度)").length === 1, itemsOf("思考深度(推理强度)").map((n) => n.textContent).join(" | "));
+  }
+
   let fail = 0;
   for (const [name, ok] of checks) {
     console.log((ok ? "OK  " : "FAIL") + " " + name);

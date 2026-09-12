@@ -34,5 +34,11 @@
   "config.language.auto": "跟随 VS Code 显示语言(默认)",
   "config.language.zh": "简体中文",
   "config.language.en": "English",
-  "config.installRollbackPlugin": "自动安装回合级 Git 回退插件到 DSH web profile(启用 /rollback、/redo、/checkpoints)"
+  "config.installRollbackPlugin": "自动安装回合级 Git 回退插件到 DSH web profile(启用 /rollback、/redo、/checkpoints)",
+  "config.protocol": "DSH 通信协议。除非排障,否则保持「自动」:扩展会实测服务端,选用真正有应答的那一代协议。",
+  "config.protocol.auto": "自动探测协议(推荐)",
+  "config.protocol.legacy": "强制 dsh 0.1.1 协议(点号路由 + events.mux/events.host 双 WebSocket)",
+  "config.protocol.modern": "强制 dsh 0.1.5 协议(斜杠路由 + 单条 remote.mux + Cookie 鉴权)",
+  "config.authToken": "仅供高级排障:直接指定发给 DSH 服务端的完整浏览器会话 Cookie(形如 `dsh-auth-xxxx=v1.…`)。它会覆盖其它所有鉴权方式。正常使用留空。",
+  "config.deriveAuthFromCredentials": "dsh 0.1.5 上,当服务端不是由 VS Code 启动时(例如你在终端里敲 `dsh web`),这是唯一能通过其请求门禁的办法。扩展只会从 `<DSH_HOME>/.credentials.yaml` 读取 `client-connection/browser-session` 这一条记录的密钥,用于给本机回环地址签一个 Cookie;除发给同一个本地服务端外,不会发往任何地方。关闭即禁止读取该文件。"
 }

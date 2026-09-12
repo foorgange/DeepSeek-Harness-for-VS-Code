@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
+import { closeSync, existsSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 export interface ServerManagerConfig {
   url: string;
@@ -12,6 +13,10 @@ export interface ServerManagerConfig {
   t?: (key: string, args?: Record<string, string | number>) => string;
   /** 诊断日志回调(启动器解析 / 进程退出码等),用于输出到日志通道。 */
   onLog?: (message: string) => void;
+  /** 服务端的 stdout/stderr 追加到这个文件(懒取值);缺省则丢弃输出。 */
+  logFile?: () => string | undefined;
+  /** 截获到 0.1.5 的启动令牌时回调(用于换取浏览器会话 Cookie)。 */
+  onLaunchToken?: (token: string) => void;
 }
 
 export interface ServerStatus {
@@ -30,6 +35,11 @@ export class ServerManager {
   private startedByUs = false;
   private starting = false;
   private lastStatus: ServerStatus;
+  /** 由本扩展启动的那个进程打印的启动令牌(0.1.5 才有;0.1.1 为 undefined)。 */
+  private launchToken: string | undefined;
+  /** 服务端日志文件路径,以及本次启动在文件里的起始偏移(用于只读新增段)。 */
+  private logPath: string | undefined;
+  private logOffset = 0;
 
   constructor(
     private readonly cfg: ServerManagerConfig,
@@ -40,6 +50,11 @@ export class ServerManager {
 
   get status(): ServerStatus {
     return this.lastStatus;
+  }
+
+  /** 启动令牌;仅在「本扩展启动了服务端」且服务端是 0.1.5 时有值。 */
+  get token(): string | undefined {
+    return this.launchToken;
   }
 
   private setStatus(patch: Partial<ServerStatus>) {
@@ -54,7 +69,10 @@ export class ServerManager {
         signal: AbortSignal.timeout(timeoutMs),
         headers: { accept: "text/html" },
       });
-      return res.ok;
+      // dsh 0.1.5 起根路径也挂了门禁:未认证返回 401,Host 不可信返回 403,
+      // 带启动令牌的交换返回 303 —— 这些**都是**「服务端正在跑」的证据。
+      // 只看 res.ok 的话,0.1.5 上会被判成「服务端已死」,ensure() 随即再拉起一个进程抢同一端口。
+      return res.ok || res.status === 303 || res.status === 401 || res.status === 403;
     } catch {
       return false;
     }
@@ -113,16 +131,27 @@ export class ServerManager {
     this.setStatus({ starting: true, up: false });
     let childExited = false;
     let exitInfo = "";
+    let logFd: number | undefined;
+    this.launchToken = undefined;
     try {
+      logFd = this.openLogFile();
       this.child = spawn(shellCommand(launcher, ["web"]), {
         shell: true,
-        stdio: "ignore",
+        // 服务端输出必须落盘:0.1.5 的启动令牌只出现在它打印的 URL 行里。
+        // 用文件而不是管道 —— 扩展宿主退出后管道会断,仍在运行的服务端下一次写
+        // stdout 就会 EPIPE 而死;文件没有这个问题,顺带让服务端日志第一次可查。
+        stdio: ["ignore", logFd ?? "ignore", logFd ?? "ignore"],
         windowsHide: true,
         // 以 VS Code 当前文件夹作为服务器工作区根目录(而非 VS Code 进程的启动目录)
         cwd: this.cfg.cwd?.(),
         // POSIX 下分离进程组,使服务器在扩展宿主重载后仍存活;Windows 子进程本就独立存活
         detached: process.platform !== "win32",
       });
+      // 子进程已经拿到自己那份 fd,父进程这份立刻还回去,避免反复重启时泄漏句柄
+      if (logFd !== undefined) {
+        closeSync(logFd);
+        logFd = undefined;
+      }
       this.startedByUs = true;
       this.log(`已启动子进程 pid=${this.child.pid ?? "?"}(首次 npx 下载包可能较慢)`);
       this.child.once("exit", (code, signal) => {
@@ -131,6 +160,7 @@ export class ServerManager {
         this.log(`子进程退出: ${exitInfo}`);
         this.child = undefined;
         this.startedByUs = false;
+        this.launchToken = undefined;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
       this.child.once("error", (error) => {
@@ -139,9 +169,19 @@ export class ServerManager {
         this.log(`子进程启动失败: ${exitInfo}`);
         this.child = undefined;
         this.startedByUs = false;
+        this.launchToken = undefined;
         this.setStatus({ up: false, startedByUs: false, starting: false });
       });
     } catch (error) {
+      // spawn 同步抛出时子进程根本没起来,上面那次 closeSync 没执行到 —— 不补这一下,
+      // 反复重试启动的机器上会一点一点漏句柄。logFd 在关掉后就置了 undefined,不会重复关。
+      if (logFd !== undefined) {
+        try {
+          closeSync(logFd);
+        } catch {
+          /* 已经关掉了就算了 */
+        }
+      }
       this.starting = false;
       this.setStatus({ starting: false });
       const detail = `spawn 抛出异常: ${error instanceof Error ? error.message : String(error)}`;
@@ -153,8 +193,17 @@ export class ServerManager {
     while (Date.now() < deadline) {
       if (await this.isUp(800)) {
         this.log("服务器已就绪");
+        // 「端口通了」和「令牌那行已经落盘」是两件事,而且差得不短:dsh-web-app 是先
+        // listen、再等整棵插件树 `loader.await()` 结束才 announceReady() 打印那行 URL
+        // (node_modules/@deepseek-ai/dsh-web-app/lib/index.js:194-215)。所以这一次 isUp
+        // 很可能正好赶在打印之前 —— 只抓一次就会漏。
+        // 漏掉的代价不小:0.1.5 上就只剩凭据派生一条鉴权路,那条路一旦被关掉(或凭据文件
+        // 不在),适配器会缓存住 legacy 的结论,面板得重载窗口才能恢复。所以这里给有界重试。
+        await this.captureLaunchTokenWithRetry();
         return { ok: true };
       }
+      // 令牌在服务端就绪前就打印了,顺路截获,省一次读盘
+      this.captureLaunchToken();
       // 子进程提前退出:不再傻等,立即失败并给出退出码(如端口被占用 / npx 报错 / 环境拦截)
       if (childExited) {
         this.log(`子进程在就绪前退出(${exitInfo}),停止等待`);
@@ -170,6 +219,71 @@ export class ServerManager {
     return { ok: false, detail };
   }
 
+  /**
+   * 打开(追加)服务端日志文件,并记下本次启动的起始偏移。
+   * 未配置或打不开时返回 undefined —— 此时退化成丢弃输出,不影响启动本身。
+   */
+  private openLogFile(): number | undefined {
+    const path = this.cfg.logFile?.();
+    if (path === undefined || path === "") return undefined;
+    // 每次启动都从干净状态开始:下面任何一步失败,都必须让「本次没有日志文件」成立。
+    // 否则 captureLaunchToken 会拿着**上一次**的 logPath/logOffset 去重读旧日志,
+    // 把上一个进程的启动令牌当成这一次的交给鉴权 —— 那正是它自己注释里说要防的事。
+    this.logPath = undefined;
+    this.logOffset = 0;
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      const size = existsSync(path) ? statSync(path).size : 0;
+      const fd = openSync(path, "a");
+      this.logPath = path;
+      this.logOffset = size;
+      this.log(`服务端输出写入 ${path}`);
+      return fd;
+    } catch (error) {
+      this.log(`无法写入服务端日志 ${path}: ${error instanceof Error ? error.message : String(error)}`);
+      return undefined;
+    }
+  }
+
+  /**
+   * 从服务端日志的**本次新增段**里截获启动令牌。
+   * `dsh web` 会打印 `dsh web: http://127.0.0.1:3080/?token=<T> (LAN: http://…?token=<T>)`,
+   * 一行里可能有两个 URL,只取第一个;只在 spawn 之后新增的部分找,免得读到上一次运行的旧令牌。
+   */
+  private captureLaunchToken() {
+    if (this.launchToken !== undefined || this.logPath === undefined) return;
+    let text: string;
+    try {
+      const size = statSync(this.logPath).size;
+      if (size <= this.logOffset) return;
+      const fd = openSync(this.logPath, "r");
+      try {
+        const buffer = Buffer.alloc(size - this.logOffset);
+        readSync(fd, buffer, 0, buffer.length, this.logOffset);
+        text = buffer.toString("utf8");
+      } finally {
+        closeSync(fd);
+      }
+    } catch {
+      return;
+    }
+    // 逐行找第一个「带 token 参数的 URL」而不是死认第一条 dsh web: 行 ——
+    // 同一段输出里还有 `dsh web: opening the default browser…` 这类纯文本行,
+    // 一旦打印顺序变了,只取首条就会永远抓不到令牌。
+    for (const match of text.matchAll(/dsh web:\s*(\S+)/gu)) {
+      let token: string | undefined;
+      try {
+        token = new URL(match[1]).searchParams.get("token") ?? undefined;
+      } catch {
+        continue;
+      }
+      if (token === undefined) continue;
+      this.launchToken = token;
+      this.log("已截获启动令牌(用于换取浏览器会话 Cookie)");
+      this.cfg.onLaunchToken?.(token);
+      return;
+    }
+  }
   /** 找到可用的启动命令:dsh → npx → npm exec 回退(含常见绝对路径,规避 VS Code PATH 不含 node 的问题)。 */
   private async resolveLauncher(): Promise<{ launcher?: string; detail?: string }> {
     const failures: string[] = [];
@@ -267,6 +381,22 @@ export class ServerManager {
     return candidates;
   }
 
+  /**
+   * 就绪之后再给启动令牌一点落盘时间(最多约 1.5 秒),抓到就立刻返回。
+   *
+   * 这条重试只在**本扩展真的 spawn 了一个服务端**之后才跑 —— 服务端本来就在跑的话
+   * `ensure()` 走 `isUp()` 快速路径,根本不会进 `start()`。所以它不会给「连一个已经在
+   * 运行的服务器」这条常见路径加任何延迟;而 0.1.1 本来就不打印令牌,最坏也只是冷启动
+   * 多等 1.5 秒(冷启动本身已经是秒级到分钟级的事)。
+   */
+  private async captureLaunchTokenWithRetry(): Promise<void> {
+    for (let attempt = 0; attempt < 6; attempt++) {
+      this.captureLaunchToken();
+      if (this.launchToken !== undefined) return;
+      await sleep(250);
+    }
+  }
+
   private log(message: string) {
     this.cfg.onLog?.(`[server] ${message}`);
   }
@@ -324,6 +454,7 @@ export class ServerManager {
     }
     this.startedByUs = false;
     this.child = undefined;
+    this.launchToken = undefined;
     this.setStatus({ up: false, startedByUs: false, starting: false });
     return { ok: true };
   }

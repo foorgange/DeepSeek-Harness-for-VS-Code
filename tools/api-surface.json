@@ -1,0 +1,816 @@
+[
+  {
+    "endpoint": "agentPresets/copy",
+    "keys": [
+      {
+        "wire": "from",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "id",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "name",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-presets\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "agentPresets/deletePreset",
+    "keys": [
+      {
+        "wire": "id",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-presets\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "agentPresets/list",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-presets\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "agentPresets/read",
+    "keys": [
+      {
+        "wire": "agentPreset",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-presets\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "agentPresets/select",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "agentPreset",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-agent-presets\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "commands/execute",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "line",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "submittedAttachments",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-commands\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "commands/list",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-commands\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "credentials/describe",
+    "keys": [
+      {
+        "wire": "refs",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "credentials/set",
+    "keys": [
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "value",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "credentials/unset",
+    "keys": [
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "directoryPicker/createDirectory",
+    "keys": [
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "name",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "directoryPicker/list",
+    "keys": [
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "directoryPicker/pick",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "fileReferences/list",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "query",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/clear",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/complete",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/create",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/edit",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/get",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/pause",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "goals/resume",
+    "keys": [
+      {
+        "wire": "agentId",
+        "from": "scope",
+        "optional": false
+      },
+      {
+        "wire": "ref",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-goal\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "llm/discoverModels",
+    "keys": [
+      {
+        "wire": "settingsNs",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-llm\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "llm/listConfigurableProviders",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-llm\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "llm/listProviders",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-llm\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/attachment",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/cancel",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/canOpenWorkspacePath",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/control",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/create",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/follow",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/fork",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/list",
+    "keys": [
+      {
+        "wire": "_request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/modelCatalog",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/openWorkspacePath",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/page",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/prompt",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/rename",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/search",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/selectModel",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "session/updateQueue",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/canOpenAgentPresetDirectory",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/describe",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/mutate",
+    "keys": [
+      {
+        "wire": "ns",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "ops",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "expectedRevision",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/openAgentPresetDirectory",
+    "keys": [
+      {
+        "wire": "agentPreset",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/openSettingsDocument",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/replace",
+    "keys": [
+      {
+        "wire": "ns",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "section",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "expectedRevision",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "settings/update",
+    "keys": [
+      {
+        "wire": "ns",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "patch",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "expectedRevision",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-settings-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "skills/list",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-session-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "subagents/interruptByParent",
+    "keys": [
+      {
+        "wire": "childSessionId",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "parentSessionId",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "mode",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-subagent\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "subagents/list",
+    "keys": [
+      {
+        "wire": "parentSessionId",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-subagent\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "subagents/prompt",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-subagent\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/archiveSession",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/create",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/delete",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/follow",
+    "keys": [],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/insertBefore",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/insertSessionBefore",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspace/rename",
+    "keys": [
+      {
+        "wire": "request",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-controller\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/changes",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/list",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/read",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "range",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/readAll",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/readBytes",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "range",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/readRelated",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      },
+      {
+        "wire": "relativePath",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  },
+  {
+    "endpoint": "workspaceFiles/stat",
+    "keys": [
+      {
+        "wire": "workspaceFileScopeId",
+        "from": "lookup",
+        "optional": false
+      },
+      {
+        "wire": "path",
+        "from": "json",
+        "optional": false
+      }
+    ],
+    "file": "C:\\Program Files\\nodejs\\node_modules\\@deepseek-ai\\dsh\\node_modules\\@deepseek-ai\\dsh-api-workspace-files\\lib\\typert.host.js"
+  }
+]

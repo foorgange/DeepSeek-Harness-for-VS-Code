@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { join } from "node:path";
 import { DshHub, type HubStatus } from "./dsh/hub";
+import type { ProtocolSetting } from "./dsh/protocol";
 import { createTranslator } from "./dsh/i18n";
 import { registerChatParticipant } from "./dsh/chatParticipant";
 import { registerCommitMessageCommand } from "./dsh/commitMessage";
@@ -9,6 +10,19 @@ import { folderCwd } from "./dsh/participantSessions";
 import { ChatPanelProvider } from "./webview/panel";
 import { ChatWindowProvider } from "./webview/window";
 import { SettingsPanelProvider } from "./webview/settingsPanel";
+
+/**
+ * 读 `dsh.protocol`。配置值是用户手输的字符串(enum 只约束 UI,不约束 settings.json),
+ * 所以这里必须自己收窄 —— 拼错的值不能静默变成 `auto`,那会让排障时「强制 legacy 却仍在探测」
+ * 这种鬼故事发生;落回 `auto` 的同时把原值报给调用方写日志。
+ */
+function readProtocolSetting(cfg: vscode.WorkspaceConfiguration, report?: (message: string) => void): ProtocolSetting {
+  const raw = cfg.get<string>("protocol", "auto").trim();
+  if (raw === "legacy" || raw === "modern" || raw === "auto") return raw;
+  // 静默收窄会让排障走进鬼故事:用户以为自己强制了 legacy,实际仍在探测。
+  report?.(`[protocol] dsh.protocol 的值 "${raw}" 不是 auto/legacy/modern 之一,已按 auto 处理`);
+  return "auto";
+}
 
 export function activate(ctx: vscode.ExtensionContext) {
   const t = createTranslator();
@@ -35,17 +49,24 @@ export function activate(ctx: vscode.ExtensionContext) {
     cwd: folderCwd,
     t: (key, args) => t(key, args ?? {}),
     defaultReasoningEffort: cfg().get<string>("defaultReasoningEffort", ""),
+    // 服务端输出落盘:0.1.5 的启动令牌只在那行 URL 里,同时这也是首次能查到服务端日志
+    logFile: () => vscode.Uri.joinPath(ctx.logUri, "dsh-server.log").fsPath,
+    // ---------- 协议与鉴权(双协议并存) ----------
+    // 同一份 vsix 要同时服务升级到 0.1.5 的和还停在 0.1.1 的用户,默认实测后再选。
+    protocol: readProtocolSetting(cfg(), (message) => output.appendLine(message)),
+    manualCookie: cfg().get<string>("authToken", "").trim() || undefined,
+    deriveAuthFromCredentials: cfg().get<boolean>("deriveAuthFromCredentials", true),
     onNotice: (message, kind) => {
       output.appendLine(`[notice] ${kind}: ${message}`);
       if (kind === "error") void vscode.window.showErrorMessage(`DSH: ${message}`);
       else void vscode.window.showWarningMessage(`DSH: ${message}`);
     },
     onStatus: (status) => {
-      const key = `${status.serverUp}|${status.muxConnected}|${status.serverStarting}`;
+      const key = `${status.serverUp}|${status.muxConnected}|${status.serverStarting}|${status.protocol ?? "?"}`;
       if (key !== lastStatusKey) {
         lastStatusKey = key;
         output.appendLine(
-          `[status] serverUp=${status.serverUp} muxConnected=${status.muxConnected} serverStarting=${status.serverStarting}${status.message ? ` · ${status.message}` : ""}`,
+          `[status] serverUp=${status.serverUp} muxConnected=${status.muxConnected} serverStarting=${status.serverStarting} protocol=${status.protocol ?? "(未装配)"}${status.message ? ` · ${status.message}` : ""}`,
         );
       }
     },
@@ -296,6 +317,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         `内置聊天参与者 API:${chatApi ? "可用(@dsh 已注册,在 Chat 输入框输入 @ 选择 dsh)" : "不可用(需要 VS Code ≥ 1.95)"}`,
         `服务器:${dshUrl()} — ${hub.status.serverUp ? "在线" : "离线(首次使用时自动启动)"}`,
         `事件流:${hub.status.muxConnected ? "已连接" : "未连接"}`,
+        `协议:${hub.status.protocol === undefined ? "尚未探测(服务器未就绪)" : hub.status.protocol === "modern" ? "modern(dsh 0.1.5)" : "legacy(dsh 0.1.1 及更早)"} · 设置 dsh.protocol=${readProtocolSetting(cfg())}`,
         `模型:${hub.status.model ?? "-"}`,
         `会话数:${hub.store.listSessions().length}`,
         `当前项目:${folderCwd() ?? "(无工作区文件夹)"}`,
@@ -332,7 +354,14 @@ export function activate(ctx: vscode.ExtensionContext) {
   // ---------- 配置变更 ----------
   ctx.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("dsh.url")) {
+      // 这三项都在 hub 构造 / 首次装配协议时读一次并缓存,改完必须重载窗口才生效。
+      // 不做静默忽略:用户改了却看不到任何变化,只会以为是扩展坏了。
+      if (
+        e.affectsConfiguration("dsh.url") ||
+        e.affectsConfiguration("dsh.protocol") ||
+        e.affectsConfiguration("dsh.authToken") ||
+        e.affectsConfiguration("dsh.deriveAuthFromCredentials")
+      ) {
         void vscode.window
           .showInformationMessage(t("msg.reloadTitle"), t("msg.reloadAction"))
           .then((pick) => {

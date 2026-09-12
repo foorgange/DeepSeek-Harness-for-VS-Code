@@ -2,7 +2,7 @@
   "name": "dsh-vscode-pro",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "publisher": "foorgange",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -259,6 +259,31 @@
           "type": "boolean",
           "default": true,
           "description": "%config.installRollbackPlugin%"
+        },
+        "dsh.protocol": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "legacy",
+            "modern"
+          ],
+          "enumDescriptions": [
+            "%config.protocol.auto%",
+            "%config.protocol.legacy%",
+            "%config.protocol.modern%"
+          ],
+          "default": "auto",
+          "description": "%config.protocol%"
+        },
+        "dsh.authToken": {
+          "type": "string",
+          "default": "",
+          "description": "%config.authToken%"
+        },
+        "dsh.deriveAuthFromCredentials": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.deriveAuthFromCredentials%"
         }
       }
     }
@@ -269,7 +294,7 @@
     "watch": "node esbuild.mjs --watch",
     "package": "npm run build && node tools/clean-releases.mjs && vsce package -o Releases",
     "typecheck": "tsc --noEmit",
-    "test": "node tests/smoke/store.test.js && node tests/smoke/render.test.js && node tests/smoke/artifact.test.js && node tests/smoke/plugin-registry.test.js && node tests/smoke/settings.test.js"
+    "test": "node tests/smoke/store.test.js && node tests/smoke/render.test.js && node tests/smoke/artifact.test.js && node tests/smoke/plugin-registry.test.js && node tests/smoke/rollback-manifest.test.js && node tests/smoke/settings.test.js && node tests/smoke/protocol-args.test.js && node tests/smoke/protocol-auth.test.js && node tests/smoke/protocol-mux.test.js && node tests/smoke/protocol-frames.test.js && node tests/smoke/protocol-history.test.js && node tests/smoke/protocol-models.test.js"
   },
   "dependencies": {
     "dompurify": "^3.2.4",

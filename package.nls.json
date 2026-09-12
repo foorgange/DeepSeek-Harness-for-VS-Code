@@ -34,5 +34,11 @@
   "config.language.auto": "Follow the VS Code display language (default)",
   "config.language.zh": "Chinese (Simplified)",
   "config.language.en": "English",
-  "config.installRollbackPlugin": "Auto-install the turn-level Git rollback plugin into the DSH web profile (enables /rollback, /redo, /checkpoints)"
+  "config.installRollbackPlugin": "Auto-install the turn-level Git rollback plugin into the DSH web profile (enables /rollback, /redo, /checkpoints)",
+  "config.protocol": "DSH wire protocol. Leave on \"auto\" unless you are troubleshooting: the extension probes the server and picks the generation that actually answers.",
+  "config.protocol.auto": "Detect the protocol automatically (recommended)",
+  "config.protocol.legacy": "Force the dsh 0.1.1 protocol (dotted routes, events.mux + events.host)",
+  "config.protocol.modern": "Force the dsh 0.1.5 protocol (slash routes, single remote.mux, cookie auth)",
+  "config.authToken": "Advanced / troubleshooting only: a full browser-session cookie to send to the DSH server (e.g. `dsh-auth-xxxx=v1.…`). Overrides all other authentication. Leave empty for normal use.",
+  "config.deriveAuthFromCredentials": "Required by dsh 0.1.5 when the server was started outside VS Code (e.g. `dsh web` in a terminal) — there is no other way to pass its request gate. The extension reads only the `client-connection/browser-session` secret from `<DSH_HOME>/.credentials.yaml` and uses it to sign a cookie for the local loopback address; nothing is sent anywhere except that same local server. Turn off to forbid reading that file."
 }

@@ -82,6 +82,17 @@ export class SessionStore {
   /** 最近活跃会话(用于面板默认选择) */
   currentSessionId: string | undefined;
   lastTurnBySession = new Map<string, number>();
+  /**
+   * 归档会话集合 —— 归档在 dsh 里**不删除会话、也不从 `session.list` 里剔除**
+   * (0.1.5 连删除 API 都没有),它只是服务端 registry 上的一个集合。官方 Web UI
+   * 自己拿这个集合去减列表,所以这里也必须自己减,否则「归档」在插件里**毫无效果**:
+   * 会话照旧挂在侧边栏,而且永远清不掉。
+   *
+   * 这是**双协议共有的缺陷**,不是 0.1.5 移植带来的:legacy 的 `workspace.list`
+   * 一直回 `archivedSessionIds`,而 `host/archived-sessions-changed` 帧两个协议都在发
+   * —— 只是 `handleHostFrame` 把它和另外三个 workspace 帧一起整条忽略了。
+   */
+  readonly archivedSessionIds = new Set<string>();
 
   private listeners = new Map<string, Set<Listener>>();
   private historyLoading = new Set<string>();
@@ -226,7 +237,9 @@ export class SessionStore {
       case "host/workspace-changed":
       case "host/workspace-removed":
       case "host/workspace-order-changed":
+        break;
       case "host/archived-sessions-changed":
+        this.setArchivedSessions(frame.archivedSessionIds);
         break;
       case "stream/error":
         console.error("[dsh] host stream error:", frame.error);
@@ -335,8 +348,32 @@ export class SessionStore {
 
   // ---------- 查询 ----------
 
+  /**
+   * 替换归档集合。服务端给的每次都是**完整集合**(不是增量),所以这里整体替换。
+   *
+   * 值没变就不通知:重连时 `workspace/follow` / `workspace.list` 会重发一份一模一样的
+   * baseline,每次都通知会让侧边栏无谓重绘一遍。
+   */
+  setArchivedSessions(ids: readonly string[]) {
+    const next = new Set(ids);
+    if (next.size === this.archivedSessionIds.size && [...next].every((id) => this.archivedSessionIds.has(id))) {
+      return;
+    }
+    this.archivedSessionIds.clear();
+    for (const id of next) this.archivedSessionIds.add(id);
+    this.emit("sessionsChanged", this.listSessions());
+  }
+
+  /**
+   * 会话列表,**已排除归档会话**。
+   *
+   * 归档会话仍然留在 `sessions` 里(正在看的那条要继续渲染、事件要继续进 store),
+   * 只是不再出现在列表里 —— 这正是官方 Web UI 的做法。
+   */
   listSessions(): StoredSession[] {
-    return [...this.sessions.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+    return [...this.sessions.values()]
+      .filter((s) => !this.archivedSessionIds.has(s.sessionId))
+      .sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
   eventsFor(sessionId: string): StoredEvent[] {
@@ -361,11 +398,33 @@ export class SessionStore {
     return added;
   }
 
-  /** 获取下一个回填起点(最老的已知 seq;未知则 undefined)。 */
+  /**
+   * 获取下一个回填起点(最老的已知 seq;未知则 undefined)。
+   *
+   * **必须取整**,而且用的是 `ceil` 而不是 `floor`。modern 的 `seq` 可能是**小数**
+   * —— 流式增量不是持久事件,它的 seq 是按「持久游标 + 小数部分」铸造出来的
+   * (见 protocol/modern/assistant.ts),好插在同一条消息的持久事件之间。
+   * 而 `session/page` 的 `beforeSeq` 只接受非负安全整数:
+   *
+   *     if (!Number.isSafeInteger(request.beforeSeq) || request.beforeSeq < 0 || Object.is(request.beforeSeq, -0))
+   *       throw new RemoteError("gateway/bad-request", "beforeSeq must be a non-negative safe integer")
+   *     —— dsh-api-session-controller/lib/index.js:1567
+   *
+   * 传小数是**硬报错**,表现是「加载更早」整块失灵(还不带任何提示)。
+   *
+   * 为什么是 `ceil`:最老的事件若是 `7.5`(一条流式增量),它下面那条整数事件 `7`
+   * 未必在我们手里(快照窗口是按「消息」切的,可能正好裁在它前面),而 `beforeSeq`
+   * 是**排他上界** —— `ceil(7.5) = 8` 会把 `7` 一起取回来,`floor(7.5) = 7` 则会
+   * 漏掉它。最老的事件是整数时两者相等。
+   *
+   * `+ 0` 是为了把 `Math.ceil(-0.4)` 产生的 `-0` 归一成 `+0`:校验器用
+   * `Object.is(x, -0)` 专门拒 `-0`,而 `-0` 在别处和 `0` 完全等价,是个只在这里
+   * 才会现形的坑。
+   */
   historyBeforeSeq(sessionId: string): number | undefined {
     const bySeq = this.events.get(sessionId);
     if (!bySeq || bySeq.size === 0) return undefined;
-    return Math.min(...bySeq.keys());
+    return Math.ceil(Math.min(...bySeq.keys())) + 0;
   }
 
   isHistoryLoading(sessionId: string): boolean {

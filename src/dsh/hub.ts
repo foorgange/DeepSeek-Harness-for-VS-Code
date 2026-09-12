@@ -1,4 +1,6 @@
-import { DshApiClient, DshApiError, type FrameEnvelope } from "./apiClient";
+import { DshApiClient, DshApiError, type FrameEnvelope } from "./protocol/legacy";
+import { createAdapter, type ProtocolSetting } from "./protocol";
+import type { ProtocolAdapter, ProtocolKind } from "./protocol/types";
 import { ServerManager } from "./serverManager";
 import { SessionStore, type StoredSession } from "./sessionStore";
 import type { HostFrame, MuxFrame, PromptContentBlock } from "./types";
@@ -12,6 +14,8 @@ export interface HubStatus {
   version?: string;
   provider?: string;
   model?: string;
+  /** 实际选用的协议世代;适配器装好前为 undefined。 */
+  protocol?: ProtocolKind;
   message?: string;
 }
 
@@ -28,6 +32,14 @@ export interface HubDeps {
   onNotice?: (message: string, kind: "info" | "warning" | "error") => void;
   /** 诊断日志(启动器解析 / 服务器进程状态),由宿主输出到日志通道。 */
   onLog?: (message: string) => void;
+  /** 服务端的 stdout/stderr 追加到这个文件(懒取值);缺省则丢弃输出。 */
+  logFile?: () => string | undefined;
+  /** 强制协议世代;`auto`(缺省)走实测。 */
+  protocol?: ProtocolSetting;
+  /** 用户在设置里手填的 Cookie(排障兜底,优先级最高)。 */
+  manualCookie?: string;
+  /** 是否允许读 `<DSH_HOME>/.credentials.yaml` 派生 Cookie(缺省允许)。 */
+  deriveAuthFromCredentials?: boolean;
   /** 翻译函数(vscode.l10n.t);hub 保持对 vscode 无依赖。 */
   t?: (key: string, args?: Record<string, string | number>) => string;
 }
@@ -37,8 +49,41 @@ const HISTORY_PAGE_MESSAGES = 60;
 /** 中枢:服务器 + API 客户端 + 会话存储的统一入口。 */
 export class DshHub {
   readonly store = new SessionStore();
-  readonly client: DshApiClient;
   readonly server: ServerManager;
+
+  private clientImpl: ProtocolAdapter | undefined;
+  private adapterKind: ProtocolKind | undefined;
+  private adapterPromise: Promise<void> | undefined;
+
+  /**
+   * 当前协议适配器。
+   *
+   * 适配器装好**之前**访问会即建一个 legacy 客户端 —— 那正是 0.12.4 的行为,
+   * 于是任何提前调用都不会崩,0.1.1 上也一切照旧。装配完成后这里换成实测选中的那个。
+   */
+  get client(): ProtocolAdapter {
+    if (!this.clientImpl) {
+      const legacy = new DshApiClient(this.deps.url);
+      legacy.setFrameHandlers(this.frameHandlers);
+      this.clientImpl = legacy;
+    }
+    return this.clientImpl;
+  }
+
+  /** 实际选用的协议世代;装配完成前为 undefined。 */
+  get protocol(): ProtocolKind | undefined {
+    return this.adapterKind;
+  }
+
+  private readonly frameHandlers = {
+    onMuxFrame: (env: FrameEnvelope<MuxFrame>) => this.onMux(env),
+    onHostFrame: (env: FrameEnvelope<HostFrame>) => this.onHost(env),
+    onState: (which: "mux" | "host", state: "disconnected" | "connecting" | "connected") => {
+      if (which === "mux") this.statusState.muxConnected = state === "connected";
+      else this.statusState.hostConnected = state === "connected";
+      this.emitStatus();
+    },
+  };
 
   private statusState: HubStatus = {
     serverUp: false,
@@ -51,11 +96,26 @@ export class DshHub {
   private readyPromise: Promise<{ ok: boolean; message?: string }> | undefined;
   private hostInfoPromise: Promise<void> | undefined;
   private statusListeners = new Set<(status: HubStatus) => void>();
+  /** 本扩展拉起的服务端打印的启动令牌(0.1.5);外部启动的服务端取不到,只能走凭据派生。 */
+  private launchToken: string | undefined;
 
   constructor(private readonly deps: HubDeps) {
-    this.client = new DshApiClient(deps.url);
     this.server = new ServerManager(
-      { url: deps.url, command: deps.command, autoStart: deps.autoStart, timeoutSec: deps.autoStartTimeoutSec, cwd: deps.cwd, t: deps.t, onLog: deps.onLog },
+      {
+        url: deps.url,
+        command: deps.command,
+        autoStart: deps.autoStart,
+        timeoutSec: deps.autoStartTimeoutSec,
+        cwd: deps.cwd,
+        t: deps.t,
+        onLog: deps.onLog,
+        logFile: deps.logFile,
+        // 0.1.5 的启动令牌由本扩展自己拉起的那个进程打印;留着备用,鉴权解析时优先用它。
+        onLaunchToken: (token) => {
+          this.launchToken = token;
+          this.emitStatus();
+        },
+      },
       (s) => {
         this.statusState.serverUp = s.up;
         this.statusState.serverStartedByUs = s.startedByUs;
@@ -64,15 +124,45 @@ export class DshHub {
         this.emitStatus();
       },
     );
-    this.client.setFrameHandlers({
-      onMuxFrame: (env) => this.onMux(env),
-      onHostFrame: (env) => this.onHost(env),
-      onState: (which, state) => {
-        if (which === "mux") this.statusState.muxConnected = state === "connected";
-        else this.statusState.hostConnected = state === "connected";
-        this.emitStatus();
-      },
+  }
+
+  /**
+   * 装配协议适配器:解析鉴权 → 实测世代 → 换手。
+   *
+   * **只在服务端已确认在线后调用** —— 对着一台没起来的服务端探测,两个探针都只会超时,
+   * 判据全废,而且会把 adapterPromise 钉死在错误的结果上。
+   *
+   * 幂等且并发共享同一 Promise;旧的 legacy 客户端(若有)先换手再释放,
+   * 免得它的重连定时器又拉起一个新的。
+   */
+  private installAdapter(): Promise<void> {
+    if (!this.adapterPromise) {
+      this.adapterPromise = this.doInstallAdapter().catch((error) => {
+        // 抛错不缓存结果:服务端可能还在启动途中,下一次 probe/ensureReady 值得重试。
+        // 注意 createAdapter 自身几乎不抛(它把探测失败都收敛成「回落 legacy」),
+        // 所以这条路径只在真正异常时生效。
+        this.adapterPromise = undefined;
+        this.deps.onLog?.(`[protocol] 适配器装配失败:${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    return this.adapterPromise;
+  }
+
+  private async doInstallAdapter(): Promise<void> {
+    const handle = await createAdapter(this.deps.url, {
+      protocol: this.deps.protocol,
+      launchToken: () => this.server.token ?? this.launchToken,
+      manualCookie: this.deps.manualCookie,
+      deriveFromCredentials: this.deps.deriveAuthFromCredentials,
+      onLog: this.deps.onLog,
     });
+    const previous = this.clientImpl;
+    this.clientImpl = handle.adapter;
+    this.adapterKind = handle.kind;
+    this.statusState.protocol = handle.kind;
+    previous?.dispose();
+    handle.adapter.setFrameHandlers(this.frameHandlers);
+    this.emitStatus();
   }
 
   get status(): HubStatus {
@@ -116,6 +206,9 @@ export class DshHub {
 
   /** 仅探测(不自动启动):服务器在线时刷新会话并选中最近会话。 */
   async probe(): Promise<boolean> {
+    // 装配协议适配器**必须在确认服务端在线之后**:对着一台没起来的服务端探测,
+    // 两个探针都只会超时,判据全废,还会把结果钉死在错误的一代上。
+    if (await this.server.isUp()) await this.installAdapter();
     const describe = await this.client.ping();
     if (describe === undefined) {
       this.statusState.serverUp = false;
@@ -141,6 +234,8 @@ export class DshHub {
       this.deps.onNotice?.(ensured.message ?? this.deps.t?.("hub.serverUnavailable") ?? "DSH server unavailable", "error");
       return { ok: false, message: ensured.message };
     }
+    // 服务端已就绪:此时探测才有意义(启动令牌也已从 stdout 抓到)
+    await this.installAdapter();
     const describe = await this.client.ping();
     if (describe === undefined) {
       const msg = this.deps.t?.("hub.serverNoResponse", { url: this.deps.url }) ?? `DSH server at ${this.deps.url} is not responding`;
@@ -266,8 +361,18 @@ export class DshHub {
   }
 
   /** 工作区列表(侧边栏按工作区分组会话)。 */
-  listWorkspaces() {
-    return this.client.listWorkspaces();
+  /**
+   * 工作区列表。顺带把归档集合灌进 store —— 两个协议的这次调用都带 `archivedSessionIds`
+   * (0.1.1 的 `workspace.list`、0.1.5 的 `workspace/follow` baseline),而侧边栏得靠它
+   * 把归档会话减掉,否则「归档」这个动作在插件里完全没有效果(见 SessionStore.archivedSessionIds)。
+   */
+  async listWorkspaces() {
+    const value = await this.client.listWorkspaces();
+    // 只在**真的带了这个字段**时才写。原来的 `?? []` 把「这次没带」当成「归档集是空的」,
+    // 于是侧边栏刚把归档会话减掉,下一次 pushWorkspaces() 又整体放回来 —— 表现为归档过滤
+    // 忽灵忽不灵。本文件其它可选投影都是 `if (x !== undefined)` 的写法,这里对齐。
+    if (value.archivedSessionIds !== undefined) this.store.setArchivedSessions(value.archivedSessionIds);
+    return value;
   }
 
   /**
@@ -284,6 +389,7 @@ export class DshHub {
           const { sessionId } = await this.client.createSession({ workspaceId, ...(agentPreset ? { agentPreset } : {}) });
           await this.refreshSessions();
           this.store.selectSession(sessionId);
+          await this.ensureHistory(sessionId);
           return sessionId;
         } catch {
           // 工作区创建失败时回退到 cwd 方式
@@ -297,6 +403,12 @@ export class DshHub {
     const { sessionId } = await this.client.createSession({ ...(cwd ? { cwd } : {}), ...(agentPreset ? { agentPreset } : {}) });
     await this.refreshSessions();
     this.store.selectSession(sessionId);
+    // 新会话也必须过一次 ensureHistory,原因见 ensureHistory 的注释:**0.1.5 没有全局
+    // 事件流**,这个会话的实时事件只走 `session/follow`,而开那条流的正是
+    // `client.sessionHistory()`。少了这一步,新建会话发出去的消息收不到任何回包 ——
+    // 界面上表现为「发出去了,一直转圈」,而服务端其实早就答完了。
+    // (0.1.1 有全局 events.mux,不会犯这个病;多打一次空历史的 RPC 无害且幂等。)
+    await this.ensureHistory(sessionId);
     return sessionId;
   }
 
@@ -529,6 +641,8 @@ export class DshHub {
   }
 
   dispose() {
-    this.client.dispose();
+    // 用可选链:从未访问过 client 时不该为了释放而现造一个 legacy 客户端。
+    this.clientImpl?.dispose();
+    this.clientImpl = undefined;
   }
 }
