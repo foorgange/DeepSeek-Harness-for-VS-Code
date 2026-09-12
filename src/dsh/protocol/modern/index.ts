@@ -126,7 +126,14 @@ export class ModernApiClient {
     }
     if (full.result === undefined) throw new DshApiError("transport/malformed", `${endpoint} 响应缺少 result 字段`);
     if (!full.result.ok) {
-      throw new DshApiError(full.result.error.code, full.result.error.message, full.result.error.details);
+      // 业务错误(HTTP 200 + 错误信封)的 message 不一定带方法名 —— 实测:
+      // `gateway/arguments-invalid` 会带(「typert gateway: session/modelCatalog: …」),
+      // 但 `session/not-found`、`gateway/internal` 都不带。未来版本的 dsh 改了某个
+      // 方法的契约时,这行是唯一能把排查范围缩到一个方法上的线索,所以缺了就补上
+      // (已经有了就不重复前缀,免得同一句话里出现两遍端点名)。
+      const detail = full.result.error.message;
+      const message = detail.includes(endpoint) ? detail : `${endpoint}: ${detail}`;
+      throw new DshApiError(full.result.error.code, message, full.result.error.details);
     }
     return full.result.value as T;
   }

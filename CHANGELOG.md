@@ -4,6 +4,48 @@
 
 ---
 
+## 0.12.6
+
+**协议探测不再把世代判定压在一个端点名上。**
+**Protocol detection no longer hinges on a single endpoint name.**
+
+0.12.5 判定 modern 只问 `session/modelCatalog` 一条路由。它一旦被未来版本的 dsh 改名或删除,
+现代服务端就会被判成「协议未知」、回落到 0.1.1 的老传输上 —— 表现是面板全空、处处 404,
+而日志里只说一句「协议未知」。
+
+### 修复 / Fixed
+
+- **单个端点改名会把现代服务端打回 0.1.1 传输。** modern 探针改成依次试
+  `session/modelCatalog` → `session/list` → `settings/describe` → `agentPresets/list`,
+  任意一条有应答即判 modern,命中即停(正常路径仍只有一次往返)。选这四条的标准是
+  **本扩展离了它就没法工作**:它们的存亡本就等同于「这个服务端能不能用」,所以多问几条
+  不会漏判一个其实可用的服务端。
+  *Modern detection now tries several slash-routed endpoints instead of a single one.*
+- **部分 gateway 错误不告诉你是哪个方法。** 实测 `session/not-found` 与 `gateway/internal`
+  的 message 里没有端点名(`gateway/arguments-invalid` 有)。现代适配器现在在缺失时补上,
+  已经有了就不重复前缀 —— 未来版本改了某个方法的契约时,这是把排查范围缩到一个方法上的线索。
+  *Gateway error messages now always name the endpoint.*
+- **探测逻辑补上了离线单测**(`protocol-detect.test.js`,23 项)。`detect.ts` 里那个 `probe`
+  注入缝隙当初就是为它留的,此前一直没有测试用它 —— 也就是说**路由决策本身没有回归网**。
+
+### 为什么扩展不按版本号路由 / Why there is no version-number routing
+
+顺带确认:扩展**从不**解析或比较 dsh 的版本号 —— 全 `src/` 里没有一处 semver 判断。
+路由完全靠「问服务端某条路由答不答」的能力探测:
+
+| 对面是什么 | 判据 | 结果 |
+|---|---|---|
+| dsh 0.1.1 及更早(点号路由) | `host.describe` 回 200 | legacy |
+| dsh 0.1.5 **及之后的版本**(斜杠路由) | 点号路由 404 + 斜杠路由 200 | modern |
+| 拿不准(服务端没起 / 凭据无效 / 路由全不认) | — | unknown ⇒ 回落 legacy |
+| `dsh.protocol` 显式指定 | 跳过探测 | 用户说了算 |
+
+版本号切法在 0.1.6 上必挂(不认识的版本号没法归类),能力探测对任何未来版本都自动正确。
+判据看的是**路由存不存在**,不是调用成不成功:gateway 的业务错误回的是 HTTP 200 + 错误信封,
+所以参数形状变化**不会**污染判定,只有路由改名或删除才会 —— 那正是这一版修掉的那一处。
+
+---
+
 ## 0.12.5
 
 **支持 dsh 0.1.5,同时保留对 0.1.1 的支持。**
@@ -95,8 +137,8 @@ dsh 0.1.5 对第三方客户端做了协议级重写:所有 `/api` 路由(含 We
 
 ### 自动化覆盖到什么程度 / What the automated tests actually cover
 
-`npm test` 有 13 个套件(会话存储 / 界面渲染 / 打包产物 / 插件注册表 / 回退插件升级迁移 /
-设置面板 / 服务端管理 / 协议层的参数表、鉴权、mux 传输、帧合成、历史、模型合成),
+`npm test` 有 14 个套件(会话存储 / 界面渲染 / 打包产物 / 插件注册表 / 回退插件升级迁移 /
+设置面板 / 服务端管理 / 协议层的参数表、鉴权、探测、mux 传输、帧合成、历史、模型合成),
 外加回退插件自己的 1 个套件(`resources/dsh-git-rollback`,由 `npm test` 一并跑)。
 全部离线跑,不碰真机。此外 `tools/` 下的探针会打**真实的 dsh**:
 

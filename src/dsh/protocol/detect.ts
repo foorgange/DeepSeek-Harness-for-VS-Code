@@ -43,8 +43,31 @@ export interface DetectResult {
 
 /** legacy 专有:0.1.5 已删除点号寻址,这条路由在 0.1.5 上必然 404。 */
 const LEGACY_PROBE = { endpoint: "host.describe", method: "host.describe", args: {} };
-/** modern 专有:0.1.1 没有这条路由。 */
-const MODERN_PROBE = { endpoint: "session/modelCatalog", method: "session/modelCatalog", args: {} };
+
+/**
+ * modern 专有探针 —— **多候选**。0.1.1 没有斜杠路由,这几条在它上面全是 404。
+ *
+ * 为什么不是一条:判据是「这条路由存不存在」,只留一条就等于把整个世代判定压在
+ * 一个端点名上。那个名字一旦被未来版本改名或删除(0.1.6 完全可能重排路由表),
+ * 现代服务端会被判成 unknown 再回落 legacy —— 用户那边表现是面板全空、处处 404,
+ * 而日志里只说「协议未知」。多留几条同世代的探针,任意一条还在就仍判得出 modern。
+ *
+ * 选这几条的标准不是「随便挑几条斜杠路由」,而是**本扩展离了它就没法工作**:
+ * 它们的存亡本就等同于「这个服务端能不能用」。所以「探针全没了」不会漏判一个
+ * 其实可用的服务端 —— 那种情况下扩展本来也跑不起来。
+ *
+ * 注意探针**不要求调用成功,只要求路由存在**:gateway 的业务错误(含
+ * `gateway/arguments-invalid`)回的是 HTTP 200 + 错误信封,`classify` 只看状态码。
+ * 所以参数形状变化不会污染判定,只有路由改名/删除才会。
+ *
+ * 顺序按重要性排,命中即停 —— 正常路径上仍然只有一次往返。
+ */
+const MODERN_PROBES = [
+  { endpoint: "session/modelCatalog", method: "session/modelCatalog", args: {} },
+  { endpoint: "session/list", method: "session/list", args: { _request: {} } },
+  { endpoint: "settings/describe", method: "settings/describe", args: {} },
+  { endpoint: "agentPresets/list", method: "agentPresets/list", args: {} },
+];
 
 function classify(res: ProbeResponse | undefined): ProbeOutcome {
   if (res === undefined) return "unreachable";
@@ -94,27 +117,35 @@ export async function detectProtocol(options: DetectOptions): Promise<DetectResu
     return { kind: "unknown", reason: `服务端不可达(${options.baseUrl})` };
   }
 
-  let modern: ProbeResponse | undefined;
-  try {
-    modern = await run(MODERN_PROBE.endpoint, MODERN_PROBE.method, MODERN_PROBE.args, timeoutMs);
-  } catch {
-    return { kind: "unknown", reason: "modern 探针请求失败,协议未知" };
-  }
-  const modernOutcome = classify(modern);
-  if (modernOutcome === "ok") {
-    return {
-      kind: "modern",
-      reason:
-        legacyOutcome === "unauthorized"
-          ? "session/modelCatalog 返回 200,且 legacy 探针被 401 拦下:鉴权指纹 + 斜杠路由,判定 0.1.5"
-          : "session/modelCatalog 返回 200:0.1.1 没有这条路由,判定 0.1.5",
-    };
-  }
-  if (modernOutcome === "unauthorized" && legacyOutcome === "unauthorized") {
-    return { kind: "unknown", reason: "两条探针都被 401 拦下:鉴权凭据无效或缺失(不是协议问题)" };
+  // 依次试各条 modern 探针,命中任意一条即判 modern。
+  const tried: string[] = [];
+  for (const candidate of MODERN_PROBES) {
+    let modern: ProbeResponse | undefined;
+    try {
+      modern = await run(candidate.endpoint, candidate.method, candidate.args, timeoutMs);
+    } catch {
+      return { kind: "unknown", reason: `modern 探针请求失败(${candidate.endpoint}),协议未知` };
+    }
+    tried.push(candidate.endpoint);
+    const modernOutcome = classify(modern);
+
+    if (modernOutcome === "ok") {
+      return {
+        kind: "modern",
+        reason:
+          legacyOutcome === "unauthorized"
+            ? `${candidate.endpoint} 返回 200,且 legacy 探针被 401 拦下:鉴权指纹 + 斜杠路由,判定 0.1.5`
+            : `${candidate.endpoint} 返回 200:0.1.1 没有斜杠路由,判定 0.1.5`,
+      };
+    }
+    // 两条都被 401 拦下 ⇒ 这是「没凭据/凭据无效」,不是「协议不对」。0.1.5 的门禁
+    // 盖在所有 /api 路由上(**连不存在的路由也回 401**),所以再试下一条不会有新信息。
+    if (modernOutcome === "unauthorized" && legacyOutcome === "unauthorized") {
+      return { kind: "unknown", reason: "两条探针都被 401 拦下:鉴权凭据无效或缺失(不是协议问题)" };
+    }
   }
   return {
     kind: "unknown",
-    reason: `两条探针都未命中(legacy=${legacyOutcome}, modern=${modernOutcome})——协议未知,不猜`,
+    reason: `modern 的 ${MODERN_PROBES.length} 条探针都未命中(试过 ${tried.join("、")};legacy=${legacyOutcome})——协议未知,不猜`,
   };
 }

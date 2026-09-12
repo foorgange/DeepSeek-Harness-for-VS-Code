@@ -14,7 +14,10 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const vsix = process.argv[2] ?? join(repo, "Releases", "dsh-vscode-pro-0.12.5.vsix");
+// 默认路径跟着 package.json 的版本走。写死版本号的话每次发版都得记得改这一行,
+// 而漏改的症状是「校验了上一版的包,然后报全绿」—— 比不校验更坏。
+const { version: pkgVersion } = JSON.parse(readFileSync(join(repo, "package.json"), "utf8"));
+const vsix = process.argv[2] ?? join(repo, "Releases", `dsh-vscode-pro-${pkgVersion}.vsix`);
 
 if (!existsSync(vsix)) {
   console.error(`找不到 ${vsix} —— 先跑 npm run package`);
@@ -75,6 +78,9 @@ try {
   // 「鉴权可刷新」压缩后标识符会被重命名,所以改探一条**只属于新代码**的日志文案
   probe("鉴权按需重解析(新代码独有的日志文案)", has("解析鉴权凭据抛错"));
   probe("服务端管理里 starting 存在", js.includes("starting"));
+  // 探测必须是**多候选**:判据压在单个端点名上时,那个名字一旦被未来版本改名,
+  // 现代服务端就会被判成 unknown 再回落 legacy,全线 404(见 detect.ts 的 MODERN_PROBES)。
+  probe("协议探测是多候选(全未命中的判据文案在包里)", has("条探针都未命中"));
   probe("PR3 闭包守卫(迟到的旧回调不改写新状态)", /this\.child!==/.test(js));
   probe("PR4 回退 clean 排除 .dsh/rollback", rollback.includes("--exclude=.dsh/rollback"));
 
