@@ -5,7 +5,7 @@ const os = require("os");
 const path = require("path");
 const repo = path.resolve(__dirname, "..", "..");
 const out = path.join(os.tmpdir(), "registry-test-" + process.pid + ".cjs");
-const { buildSync } = require(path.join(repo, "node_modules", "esbuild"));
+const { buildSync } = require(path.join(repo, "node_modules/esbuild"));
 buildSync({
   entryPoints: [path.join(repo, "src/dsh/pluginRegistry.ts")],
   bundle: true,
